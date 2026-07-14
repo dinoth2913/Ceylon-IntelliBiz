@@ -217,7 +217,7 @@ export default function HomePage() {
 
             <div className="flex flex-wrap gap-3">
               <motion.a
-                href="/"
+                href="/auth"
                 whileHover={{ y: -2, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`inline-flex items-center gap-2 rounded-full px-5 py-3 font-medium shadow-lg ${darkMode ? 'bg-cyan-400 text-slate-950 shadow-cyan-400/20' : 'bg-slate-950 text-white shadow-slate-950/15'}`}
@@ -225,7 +225,7 @@ export default function HomePage() {
                 Explore Platform <ArrowRight className="h-4 w-4" />
               </motion.a>
               <motion.a
-                href="/"
+                href="/auth"
                 whileHover={{ y: -2, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`inline-flex items-center gap-2 rounded-full border px-5 py-3 font-medium ${darkMode ? 'border-white/10 bg-white/10 text-slate-100' : 'border-slate-200 bg-white text-slate-700 shadow-sm'}`}
