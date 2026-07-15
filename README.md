@@ -28,11 +28,21 @@ Ceylon IntelliBiz is a modular enterprise platform designed for Sri Lankan busin
 ## Quick Start
 
 1. Clone the repository.
-2. Build the containers:
+2. Start PostgreSQL and the app stack:
    - docker compose -f docker/docker-compose.yml up --build
 3. Open the frontend at http://localhost:3000
 4. Open the API health endpoint at http://localhost:8080/api/health
-5. Open the AI health endpoint at http://localhost:8000/health
+5. Open the database connectivity check at http://localhost:8080/api/db-test
+6. Open the AI health endpoint at http://localhost:8000/health
+
+## PostgreSQL Connection Notes
+
+- The backend uses the PostgreSQL service name `db` inside Docker Compose, so the JDBC URL is `jdbc:postgresql://db:5432/intellibiz`.
+- The database credentials are:
+  - Username: `postgres`
+  - Password: `postgres`
+  - Database: `intellibiz`
+- The initialization SQL file is loaded from [database/schema.sql](database/schema.sql) automatically when the Postgres container starts for the first time.
 
 ## Roadmap
 

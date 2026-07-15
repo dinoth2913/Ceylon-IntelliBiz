@@ -1,84 +1,108 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { ArrowRight, ShoppingBag, Sparkles, ShieldCheck, Bot } from 'lucide-react';
-import Link from 'next/link';
+import { useState } from 'react';
+import { Sparkles, Search, Filter } from 'lucide-react';
 import { SiteShell } from '@/components/site-shell';
+import { ProductCard } from '@/components/product-card';
 
-const marketplaceHighlights = [
+// Mock product data for demonstration
+const mockProducts = [
   {
-    title: 'Vendor onboarding',
-    description: 'Streamline supplier intake, compliance, and onboarding in one workspace.',
-    icon: ShieldCheck
+    id: 'prod-1',
+    title: 'Enterprise ERP License',
+    description: 'Annual license for the full enterprise resource planning suite including HR and finance modules.',
+    price: 'LKR 450,000 / yr',
+    rating: 4,
+    reviews: 28,
+    category: 'Software'
   },
   {
-    title: 'Catalog intelligence',
-    description: 'Surface catalog insights, pricing trends, and replenishment opportunity.',
-    icon: Sparkles
+    id: 'prod-2',
+    title: 'AI Forecasting Module',
+    description: 'Plugin for your existing CRM to predict sales trends and flag at-risk accounts automatically.',
+    price: 'LKR 125,000 / yr',
+    rating: 5,
+    reviews: 14,
+    category: 'Add-on'
   },
   {
-    title: 'AI buyer assistance',
-    description: 'Let your teams ask questions and receive action-oriented recommendations.',
-    icon: Bot
+    id: 'prod-3',
+    title: 'Implementation Consultation',
+    description: '40 hours of dedicated expert consultation to set up your workflow and train your core team.',
+    price: 'LKR 180,000',
+    rating: 5,
+    reviews: 42,
+    category: 'Service'
+  },
+  {
+    id: 'prod-4',
+    title: 'Vendor API Access Tier 1',
+    description: 'Secure API access to integrate external marketplaces directly into your inventory layer.',
+    price: 'LKR 65,000 / mo',
+    rating: 3,
+    reviews: 8,
+    category: 'Infrastructure'
   }
 ];
 
 export default function MarketplacePage() {
-  return (
-    <SiteShell title="See how marketplace intelligence accelerates sourcing and supplier collaboration." subtitle="Book a guided walkthrough to see how Ceylon IntelliBiz helps buyers, suppliers, and operations teams work in sync.">
-      <section className="overflow-hidden rounded-[32px] border border-slate-200/80 bg-white/80 p-8 shadow-[0_35px_100px_-32px_rgba(15,23,42,0.38)] backdrop-blur-xl">
-          <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-                <Sparkles className="h-4 w-4" />
-                Marketplace intelligence
-              </div>
-              <h1 className="text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Power commerce, sourcing, and supplier cooperation from one connected layer.
-              </h1>
-              <p className="max-w-xl text-lg leading-8 text-slate-600">
-                Bring buyers, suppliers, and internal teams together with a platform that helps you manage buying, order flow, and vendor performance.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link href="/" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-3 font-medium text-white">
-                  Explore platform <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link href="/solutions" className="rounded-full border border-slate-200 bg-white px-5 py-3 font-medium text-slate-700">
-                  View solutions
-                </Link>
-              </div>
-            </div>
+  const [searchTerm, setSearchTerm] = useState('');
 
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45 }}
-              className="rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_25px_55px_-25px_rgba(2,8,23,0.8)]"
-            >
-              <div className="rounded-[22px] border border-white/10 bg-white/10 p-5">
-                <p className="text-sm uppercase tracking-[0.32em] text-slate-400">Marketplace overview</p>
-                <div className="mt-4 space-y-3">
-                  {marketplaceHighlights.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <div key={item.title} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400/10 text-emerald-300">
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <h2 className="font-semibold">{item.title}</h2>
-                            <p className="mt-1 text-sm text-slate-400">{item.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </motion.div>
+  const filteredProducts = mockProducts.filter((product) => 
+    product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <SiteShell 
+      title="Discover software, services, and add-ons." 
+      subtitle="Expand your capabilities with trusted products available directly on the Ceylon IntelliBiz marketplace."
+    >
+      <section className="rounded-[32px] border border-slate-200/80 bg-white/80 p-8 shadow-[0_35px_100px_-32px_rgba(15,23,42,0.38)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/60">
+        
+        {/* Header and Search */}
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
+              <Sparkles className="h-4 w-4" />
+              Marketplace Store
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+              Products & Services
+            </h1>
           </div>
-        </section>
+
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <div className="relative flex-1 sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search products..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-cyan-400 dark:border-white/10 dark:bg-slate-950/50 dark:text-white"
+              />
+            </div>
+            <button className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">
+              <Filter className="h-4 w-4" /> Filter
+            </button>
+          </div>
+        </div>
+
+        {/* Product Grid */}
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredProducts.length > 0 ? (
+            filteredProducts.map((product) => (
+              <ProductCard key={product.id} {...product} />
+            ))
+          ) : (
+            <div className="col-span-full py-12 text-center text-slate-500">
+              No products found matching "{searchTerm}".
+            </div>
+          )}
+        </div>
+
+      </section>
     </SiteShell>
   );
 }

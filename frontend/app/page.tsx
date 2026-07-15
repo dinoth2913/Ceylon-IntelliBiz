@@ -201,10 +201,10 @@ export default function HomePage() {
                 AI-Powered Business Operating Platform for Sri Lanka
               </div>
               <h1 className={`text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl ${headingClass}`}>
-                Enterprise software for modern business operations.
+                Transform the Way Sri Lankan Businesses Operate
               </h1>
               <p className={`max-w-xl text-lg leading-8 ${bodyTextClass}`}>
-                Ceylon IntelliBiz unifies CRM, ERP, marketplace, finance, HR, analytics, and AI automation in one secure platform built for ambitious organizations.
+                Ceylon IntelliBiz is an all-in-one AI-powered Business Operating Platform designed specifically for Sri Lankan businesses. It combines CRM, ERP, Marketplace, Finance, Inventory, HR, Sales, Customer Support, and AI into a single intelligent ecosystem.
               </p>
               <div className="flex flex-wrap gap-2 pt-2">
                 {['Secure by design', 'Zero-friction rollout', 'Actionable insight'].map((item) => (
@@ -282,21 +282,21 @@ export default function HomePage() {
               <Sparkles className="h-4 w-4" />
               Product showcase
             </div>
-            <h3 className={`text-2xl font-semibold sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>A single operating layer for teams that move fast.</h3>
+            <h3 className={`text-2xl font-semibold sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Built for the Challenges Faced by Sri Lankan Businesses</h3>
             <p className={`max-w-xl text-base leading-7 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-              From customer engagement to finance controls, every workflow is brought together with real-time context and AI support so leaders can act with confidence.
+              Many businesses in Sri Lanka still depend on spreadsheets and disconnected software. Ceylon IntelliBiz solves these challenges by providing one secure platform where every department can collaborate and automate workflows.
             </p>
             <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${darkMode ? 'border-white/10 bg-white/10 text-slate-200' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              Trusted by operations, finance, and customer success teams
+              Overcome manual record keeping and poor insights
             </div>
           </div>
 
           <div className="grid gap-3">
             {[
-              { title: 'Unified workflow orchestration', description: 'Connect CRM, ERP, marketplace, and AI under one operating surface.' },
-              { title: 'Rapid deployment for modern teams', description: 'Launch with governance, role-based controls, and built-in analytics.' },
-              { title: 'AI-assisted decision support', description: 'Turn fragmented data into recommended actions in minutes.' }
+              { title: 'Manual Record Keeping', description: 'Eliminate the risk of errors and lost information by digitizing customer records, invoices, and inventory.' },
+              { title: 'Disconnected Business Systems', description: 'Unify accounting, inventory, and customer management into one collaborative ecosystem.' },
+              { title: 'Lack of Business Insights', description: 'Replace guesswork with reliable data, proper reporting, and analytics for important decisions.' }
             ].map((item) => (
               <div key={item.title} className={`rounded-[20px] border p-4 ${darkMode ? 'border-white/10 bg-slate-950/70' : 'border-slate-200 bg-slate-50/80'}`}>
                 <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{item.title}</h4>
@@ -337,8 +337,8 @@ export default function HomePage() {
           className={`flex flex-col gap-4 rounded-[24px] border px-4 py-4 text-sm sm:flex-row sm:items-center sm:justify-between ${darkMode ? 'border-white/10 bg-slate-900/60 text-slate-300' : 'border-slate-200 bg-slate-50/80 text-slate-600'}`}
         >
           <div>
-            <p className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Built for modern operations teams</p>
-            <p className="mt-1">Trusted by growing organizations across Sri Lanka and beyond.</p>
+            <p className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>Ready to Transform Your Business?</p>
+            <p className="mt-1">Experience the future of business management with Ceylon IntelliBiz.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {['Privacy', 'Security', 'Contact'].map((item) => (
