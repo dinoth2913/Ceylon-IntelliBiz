@@ -23,9 +23,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/intellibiz
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/intellibiz
     depends_on:
       db:
         condition: service_healthy
+      mongodb:
+        condition: service_started
 
   ai:
     image: python:3.11-slim
@@ -53,5 +56,17 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ../database:/docker-entrypoint-initdb.d
 
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+      - ../database/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    environment:
+      MONGO_INITDB_DATABASE: intellibiz
+
 volumes:
   pgdata:
+  mongodata:
+
