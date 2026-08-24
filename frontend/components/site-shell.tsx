@@ -17,7 +17,8 @@ const navItems = [
   { label: 'Platform', href: '/' },
   { label: 'Marketplace', href: '/marketplace' },
   { label: 'Solutions', href: '/solutions' },
-  { label: 'Insights', href: '/insights' }
+  { label: 'Insights', href: '/insights' },
+  { label: 'Dashboard', href: '/dashboard' }
 ];
 
 const initialFormState = {

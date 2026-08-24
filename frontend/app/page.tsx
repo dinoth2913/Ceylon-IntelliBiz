@@ -61,7 +61,8 @@ const navItems = [
   { label: 'Platform', href: '/' },
   { label: 'Marketplace', href: '/marketplace' },
   { label: 'Solutions', href: '/solutions' },
-  { label: 'Insights', href: '/insights' }
+  { label: 'Insights', href: '/insights' },
+  { label: 'Dashboard', href: '/dashboard' }
 ];
 const particles = [
   { left: '8%', top: '12%', size: '8px', delay: 0 },

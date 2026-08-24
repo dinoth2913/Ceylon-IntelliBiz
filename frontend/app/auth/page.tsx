@@ -1,15 +1,34 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { useMemo, useState } from 'react';
-import { ArrowRight, Bot, Eye, EyeOff, Lock, Mail, Sparkles, UserPlus } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ArrowRight, Bot, Eye, EyeOff, Lock, Mail, Sparkles, UserPlus } from 'lucide-react';
+import { getSession, login, register } from '@/lib/auth';
 
 export default function AuthPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [redirectTo, setRedirectTo] = useState('/dashboard');
+
+  useEffect(() => {
+    // Already signed in? Skip straight to the workspace instead of showing the form.
+    if (getSession()) {
+      router.replace('/dashboard');
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get('redirect');
+    if (target && target.startsWith('/dashboard')) {
+      setRedirectTo(target);
+    }
+  }, [router]);
 
   const title = useMemo(() => (mode === 'login' ? 'Welcome back' : 'Create your account'), [mode]);
   const subtitle = useMemo(
@@ -20,9 +39,27 @@ export default function AuthPage() {
     [mode]
   );
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      if (mode === 'login') {
+        await login(form.email, form.password);
+      } else {
+        // The backend's `users` table tracks username and email separately; this
+        // workspace uses the work email as the username so signup only needs one
+        // identifier from the visitor.
+        await register(form.email, form.email, form.password);
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setSubmitted(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -78,6 +115,7 @@ export default function AuthPage() {
               onClick={() => {
                 setMode(mode === 'login' ? 'signup' : 'login');
                 setSubmitted(false);
+                setError(null);
               }}
               className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
             >
@@ -134,21 +172,41 @@ export default function AuthPage() {
                     className="w-full bg-transparent outline-none"
                     value={form.password}
                     onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    minLength={mode === 'signup' ? 8 : undefined}
                     required
                   />
                   <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-slate-400">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {mode === 'signup' && <span className="font-normal text-xs text-slate-400">At least 8 characters.</span>}
               </label>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {error}
+                    {error.toLowerCase().includes('fetch') || error.toLowerCase().includes('failed to fetch') ? (
+                      <> — the backend API isn&apos;t reachable. Make sure the Spring Boot service is running (see the docker-compose Quick Start in the README).</>
+                    ) : null}
+                  </span>
+                </motion.div>
+              )}
 
               <motion.button
                 whileHover={{ y: -2, scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg shadow-slate-950/15"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg shadow-slate-950/15 disabled:opacity-60"
               >
-                {mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight className="h-4 w-4" />
+                {isSubmitting ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+                {!isSubmitting && <ArrowRight className="h-4 w-4" />}
               </motion.button>
             </form>
 
@@ -156,11 +214,19 @@ export default function AuthPage() {
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                className="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 sm:flex-row sm:items-center sm:justify-between"
               >
-                {mode === 'login'
-                  ? 'You are now ready to continue into your workspace.'
-                  : 'Your account has been prepared. Please check your inbox to confirm your email.'}
+                <span>
+                  {mode === 'login'
+                    ? 'Signed in — your workspace is ready.'
+                    : 'Your account has been created and you are signed in.'}
+                </span>
+                <Link
+                  href={redirectTo}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Go to workspace <ArrowRight className="h-4 w-4" />
+                </Link>
               </motion.div>
             )}
           </div>
