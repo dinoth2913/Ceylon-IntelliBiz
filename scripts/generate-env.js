@@ -19,7 +19,8 @@ if (fs.existsSync(envPath)) {
 
 const secret = (bytes) => crypto.randomBytes(bytes).toString('base64url');
 const generated = {
-  POSTGRES_PASSWORD: secret(24),
+  MONGODB_ROOT_PASSWORD: secret(24),
+  MONGODB_APP_PASSWORD: secret(24),
   JWT_SECRET: secret(48),
   BOOTSTRAP_ADMIN_PASSWORD: secret(18)
 };

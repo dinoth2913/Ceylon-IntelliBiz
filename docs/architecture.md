@@ -21,10 +21,11 @@ Ceylon IntelliBiz is a modular, cloud-ready enterprise platform designed for Sri
 
 ## Data Strategy
 
-- PostgreSQL for transactional systems and relational data
-- MongoDB for document-oriented data and flexible entity models
-- Redis for caching and session state
-- Elasticsearch for search and analytics indexing
+- MongoDB is the single database for all data: users, customers, vendors, orders, invoices, inventory, demo requests, marketplace products, reviews and chat messages
+- Referential checks that a relational database would enforce (an order's customer must exist, a customer with orders can't be deleted) are done in the application, and uniqueness is enforced with unique indexes
+- Money is stored as Decimal128
+- Redis for caching and session state (planned)
+- Elasticsearch for search and analytics indexing (planned)
 
 ## Security Controls
 
