@@ -2,8 +2,12 @@ node_modules/
 .next/
 out/
 coverage/
+target/
+__pycache__/
+.pytest_cache/
 .env
 .env.*
+!.env.example
 .vscode/
 .DS_Store
 *.log
