@@ -7,7 +7,7 @@ import { useDashboardTheme } from './dashboard-shell';
 type StatCardProps = {
   label: string;
   value: string;
-  trend: string;
+  trend?: string;
   trendDirection?: 'up' | 'down';
   icon: LucideIcon;
   accent: string;
@@ -29,9 +29,11 @@ export function StatCard({ label, value, trend, trendDirection = 'up', icon: Ico
         <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${accent}`}>
           <Icon className="h-5 w-5" />
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${trendDirection === 'up' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300'}`}>
-          {trend}
-        </span>
+        {trend && (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${trendDirection === 'up' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300'}`}>
+            {trend}
+          </span>
+        )}
       </div>
       <p className={`mt-4 text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{label}</p>
       <p className={`mt-1 text-2xl font-semibold tracking-tight ${darkMode ? 'text-white' : 'text-slate-950'}`}>{value}</p>

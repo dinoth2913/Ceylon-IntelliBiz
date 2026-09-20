@@ -40,6 +40,15 @@ export type InvoiceRecord = {
   due: string;
 };
 
+export type VendorRecord = {
+  id: string;
+  company: string;
+  contact: string;
+  email: string;
+  phone: string;
+  added: string;
+};
+
 export type ActivityItem = {
   id: string;
   actor: string;
@@ -88,6 +97,13 @@ export const invoices: InvoiceRecord[] = [
   { id: 'INVC-2212', customer: 'Kandy Hardware Co.', amount: 191200, status: 'Overdue', issued: 'Jul 30, 2026', due: 'Aug 13, 2026' },
   { id: 'INVC-2211', customer: 'Ceylon Spice Traders', amount: 132400, status: 'Paid', issued: 'Aug 20, 2026', due: 'Sep 03, 2026' },
   { id: 'INVC-2210', customer: 'Negombo Fresh Foods', amount: 214300, status: 'Draft', issued: '—', due: '—' }
+];
+
+export const vendors: VendorRecord[] = [
+  { id: 'VEN-301', company: 'Ceylon Spice Growers Co-op', contact: 'Anura Rathnayake', email: 'anura@spicegrowers.lk', phone: '+94 71 552 8804', added: 'Aug 18, 2026' },
+  { id: 'VEN-300', company: 'Weligama Handloom Weavers', contact: 'Sanduni Herath', email: 'sanduni@weligamaweavers.lk', phone: '+94 77 310 4427', added: 'Aug 11, 2026' },
+  { id: 'VEN-299', company: 'Kurunegala Steel & Roofing', contact: 'Prasanna Gunawardena', email: 'sales@kurunegalasteel.lk', phone: '+94 76 481 2290', added: 'Aug 02, 2026' },
+  { id: 'VEN-298', company: 'Nuwara Eliya Fresh Farms', contact: 'Dilhani Senanayake', email: 'dilhani@nefreshfarms.lk', phone: '+94 70 226 9915', added: 'Jul 24, 2026' }
 ];
 
 export const activity: ActivityItem[] = [

@@ -99,6 +99,25 @@ export async function register(username: string, email: string, password: string
   return session;
 }
 
+/**
+ * Re-reads the signed-in user from the server so a role an admin has just changed is picked up
+ * without logging in again. Returns null if the session is gone (apiFetch clears it on a 401).
+ */
+export async function refreshUser(): Promise<AuthUser | null> {
+  const session = getSession();
+  if (!session) return null;
+  try {
+    const response = await apiFetch('/api/auth/me');
+    if (!response.ok) return null;
+    const data = await response.json();
+    const user: AuthUser = { userId: data.userId, username: data.username, email: data.email, role: data.role };
+    saveSession({ token: session.token, user });
+    return user;
+  } catch {
+    return null;
+  }
+}
+
 export function logout() {
   clearSession();
 }

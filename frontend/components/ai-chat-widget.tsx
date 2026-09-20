@@ -4,12 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Sparkles, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { sendChatMessage } from '@/lib/ai';
 
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
 };
+
+const starterPrompts = ['What can you do?', 'What should I reorder this week?', 'Do I have overdue invoices?'];
 
 export function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,7 +21,8 @@ export function AiChatWidget() {
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  
+  const [suggestions, setSuggestions] = useState<string[]>(starterPrompts);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -31,25 +35,33 @@ export function AiChatWidget() {
     }
   }, [messages, isOpen, isTyping]);
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isTyping) return;
+  const send = async (text: string) => {
+    const content = text.trim();
+    if (!content || isTyping) return;
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input.trim() };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => [...prev, { id: `${Date.now()}-user`, role: 'user', content }]);
     setInput('');
+    setSuggestions([]);
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `I can certainly help you with "${userMsg.content}". Our AI services are currently running in simulation mode, but this is exactly how I would respond!`
-      };
-      setMessages(prev => [...prev, aiMsg]);
+    try {
+      const { reply, suggestions: next } = await sendChatMessage(content);
+      setMessages(prev => [...prev, { id: `${Date.now()}-ai`, role: 'assistant', content: reply }]);
+      setSuggestions(next);
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        { id: `${Date.now()}-err`, role: 'assistant', content: "Sorry, I couldn't reach the assistant just now. Please try again in a moment." }
+      ]);
+      setSuggestions(starterPrompts);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    void send(input);
   };
 
   return (
@@ -127,6 +139,20 @@ export function AiChatWidget() {
 
             {/* Input Area */}
             <div className="border-t border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-slate-950">
+              {suggestions.length > 0 && !isTyping && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {suggestions.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => void send(prompt)}
+                      className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
               <form onSubmit={handleSend} className="relative flex items-center">
                 <input
                   type="text"

@@ -1,20 +1,82 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, PackageCheck } from 'lucide-react';
+import { AlertTriangle, PackageCheck, Radio } from 'lucide-react';
 import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
-import { formatLkr, inventory } from '@/lib/dashboard-data';
+import { apiFetch } from '@/lib/auth';
+import { inventory as seedInventory, formatLkr, type InventoryRecord } from '@/lib/dashboard-data';
+
+type BackendInventoryItem = {
+  id: number;
+  sku: string;
+  name: string;
+  category: string | null;
+  warehouse: string | null;
+  price: number;
+  stockQuantity: number | null;
+  reorderLevel: number | null;
+};
+
+function mapInventoryItem(record: BackendInventoryItem): InventoryRecord {
+  return {
+    id: `INV-${record.id}`,
+    sku: record.sku,
+    name: record.name,
+    category: record.category ?? 'Uncategorized',
+    warehouse: record.warehouse ?? '—',
+    stock: record.stockQuantity ?? 0,
+    reorderLevel: record.reorderLevel ?? 10,
+    unitCost: record.price
+  };
+}
 
 export default function InventoryPage() {
   const { darkMode } = useDashboardTheme();
+  const [inventory, setInventory] = useState<InventoryRecord[]>(seedInventory);
+  const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiFetch('/api/inventory');
+        if (!response.ok) return;
+        const data: BackendInventoryItem[] = await response.json();
+        if (!cancelled && Array.isArray(data)) {
+          setInventory(data.length > 0 ? data.map(mapInventoryItem) : seedInventory);
+          setDataSource('live');
+        }
+      } catch {
+        // Backend not reachable — keep showing the bundled sample data.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const lowStockCount = inventory.filter((item) => item.stock <= item.reorderLevel).length;
   const totalValue = inventory.reduce((sum, item) => sum + item.stock * item.unitCost, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Operations</p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Operations</p>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              dataSource === 'live'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : darkMode
+                  ? 'border-white/10 text-slate-400'
+                  : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+          </span>
+        </div>
         <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Inventory</h1>
       </div>
 

@@ -21,29 +21,33 @@ import { SiteShell } from '@/components/site-shell';
 
 const modules = [
   {
+    id: 'crm',
     title: 'CRM',
-    description: 'Customer, lead, and opportunity workflows',
+    description: 'Customer records, search, and follow-up in one place',
     icon: Briefcase,
     gradient: 'from-sky-500/20 via-cyan-400/10 to-transparent',
     accent: 'border-sky-200 bg-sky-50/70 text-sky-700'
   },
   {
+    id: 'erp',
     title: 'ERP',
-    description: 'Inventory, finance, procurement, HR, and assets',
+    description: 'Inventory, orders, and invoicing that agree with each other',
     icon: ShieldCheck,
     gradient: 'from-violet-500/20 via-fuchsia-400/10 to-transparent',
     accent: 'border-violet-200 bg-violet-50/70 text-violet-700'
   },
   {
+    id: 'marketplace',
     title: 'Marketplace',
-    description: 'Vendor onboarding, catalog, orders, and payments',
+    description: 'Vendor records, a product catalogue, and checkout',
     icon: ShoppingCart,
     gradient: 'from-emerald-500/20 via-lime-400/10 to-transparent',
     accent: 'border-emerald-200 bg-emerald-50/70 text-emerald-700'
   },
   {
+    id: 'ai',
     title: 'AI',
-    description: 'Forecasting, OCR, search, and automation',
+    description: 'An assistant and insights drawn from your own data',
     icon: Bot,
     gradient: 'from-amber-500/20 via-orange-400/10 to-transparent',
     accent: 'border-amber-200 bg-amber-50/70 text-amber-700'
@@ -51,10 +55,10 @@ const modules = [
 ];
 
 const metrics = [
-  { title: 'Revenue', value: 'LKR 28.4M', trend: '+18.2%', accent: 'bg-emerald-50 text-emerald-700' },
-  { title: 'Active Customers', value: '13,248', trend: '+7.4%', accent: 'bg-blue-50 text-blue-700' },
-  { title: 'Inventory Turns', value: '4.8x', trend: '+12.1%', accent: 'bg-violet-50 text-violet-700' },
-  { title: 'Support SLA', value: '97.2%', trend: '+3.1%', accent: 'bg-amber-50 text-amber-700' }
+  { title: 'Monthly revenue', value: 'LKR 28.4M' },
+  { title: 'Customers', value: '13,248' },
+  { title: 'Open orders', value: '184' },
+  { title: 'Outstanding invoices', value: 'LKR 677K' }
 ];
 
 const navItems = [
@@ -205,10 +209,10 @@ export default function HomePage() {
                 Transform the Way Sri Lankan Businesses Operate
               </h1>
               <p className={`max-w-xl text-lg leading-8 ${bodyTextClass}`}>
-                Ceylon IntelliBiz is an all-in-one AI-powered Business Operating Platform designed specifically for Sri Lankan businesses. It combines CRM, ERP, Marketplace, Finance, Inventory, HR, Sales, Customer Support, and AI into a single intelligent ecosystem.
+                Ceylon IntelliBiz is an all-in-one AI-powered Business Operating Platform designed specifically for Sri Lankan businesses. It combines CRM, ERP, Marketplace, Finance, Inventory, and AI into a single intelligent ecosystem.
               </p>
               <div className="flex flex-wrap gap-2 pt-2">
-                {['Secure by design', 'Zero-friction rollout', 'Actionable insight'].map((item) => (
+                {['Secure sign-in', 'Built for LKR', 'Actionable insight'].map((item) => (
                   <span key={item} className={`rounded-full border px-3 py-1 text-sm font-medium ${darkMode ? 'border-white/10 bg-white/10 text-slate-200' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
                     {item}
                   </span>
@@ -246,14 +250,15 @@ export default function HomePage() {
           {modules.map((module, index) => {
             const Icon = module.icon;
             return (
-              <motion.div
+              <motion.a
                 key={module.title}
+                href={`/solutions#${module.id}`}
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 + index * 0.06, duration: 0.45 }}
                 whileHover={{ y: -8, scale: 1.02, boxShadow: darkMode ? '0 24px 50px -24px rgba(2, 8, 23, 0.85)' : '0 24px 50px -24px rgba(15, 23, 42, 0.35)' }}
                 whileTap={{ scale: 0.98 }}
-                className={`group relative overflow-hidden rounded-[24px] border p-5 ${softCardClass}`}
+                className={`group relative block overflow-hidden rounded-[24px] border p-5 ${softCardClass}`}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${module.gradient} opacity-0 transition duration-500 group-hover:opacity-100`} />
                 <div className="relative">
@@ -265,9 +270,10 @@ export default function HomePage() {
                   <div className={`mt-5 flex items-center gap-2 text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     Live coordination
+                    <ArrowRight className="ml-auto h-4 w-4 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
                   </div>
                 </div>
-              </motion.div>
+              </motion.a>
             );
           })}
         </motion.div>
@@ -316,17 +322,17 @@ export default function HomePage() {
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.24),_transparent_38%)]" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.32em] text-slate-400">Executive Overview</p>
+              <p className="text-sm uppercase tracking-[0.32em] text-slate-400">Dashboard preview</p>
               <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">Business performance at a glance</h2>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-200">
-              <TrendingUp className="h-4 w-4 text-emerald-400" /> Live insights enabled
+              <TrendingUp className="h-4 w-4 text-emerald-400" /> Sample data, for illustration
             </div>
           </div>
 
           <div className="relative mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric, index) => (
-              <MetricCard key={metric.title} {...metric} index={index} darkMode={darkMode} />
+              <MetricCard key={metric.title} {...metric} note="Sample data" index={index} darkMode={darkMode} />
             ))}
           </div>
         </motion.div>
@@ -342,14 +348,18 @@ export default function HomePage() {
             <p className="mt-1">Experience the future of business management with Ceylon IntelliBiz.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {['Privacy', 'Security', 'Contact'].map((item) => (
+            {[
+              { label: 'Privacy', href: '/privacy' },
+              { label: 'Security', href: '/security' },
+              { label: 'Contact', href: '/contact' }
+            ].map((item) => (
               <motion.a
-                key={item}
-                href="/"
+                key={item.label}
+                href={item.href}
                 whileHover={{ y: -1, scale: 1.01 }}
                 className={`rounded-full px-3 py-2 transition ${darkMode ? 'hover:bg-white/10 hover:text-white' : 'hover:bg-white hover:text-slate-900'}`}
               >
-                {item}
+                {item.label}
               </motion.a>
             ))}
           </div>

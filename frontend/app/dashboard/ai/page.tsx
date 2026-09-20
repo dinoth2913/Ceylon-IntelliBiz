@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Send, Sparkles, TrendingUp, ShieldAlert, Target, Zap } from 'lucide-react';
+import { Bot, Radio, Send, Sparkles, TrendingUp, ShieldAlert, Target, Zap } from 'lucide-react';
 import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
-import { aiInsights } from '@/lib/dashboard-data';
+import { fetchInsights, sendChatMessage } from '@/lib/ai';
+import { aiInsights as seedInsights, type AiInsight } from '@/lib/dashboard-data';
 
 const categoryIcon = {
   Forecast: TrendingUp,
@@ -33,34 +34,78 @@ export default function AiAssistantPage() {
   const { darkMode } = useDashboardTheme();
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', text: 'Hello Asha — I\'m the Ceylon IntelliBiz assistant. Ask me about sales, inventory, forecasts, or customer risk and I\'ll pull the latest signal from your workspace.' }
+    { role: 'assistant', text: 'Hello — I\'m the Ceylon IntelliBiz assistant. Ask me about sales, inventory, invoices, or customers and I\'ll answer from your workspace data.' }
   ]);
   const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>(starterPrompts);
+  const [insights, setInsights] = useState<AiInsight[]>(seedInsights);
+  const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
 
-  const respond = (prompt: string) => {
-    const trimmed = prompt.trim();
-    if (!trimmed) return;
-    setMessages((current) => [
-      ...current,
-      { role: 'user', text: trimmed },
-      {
-        role: 'assistant',
-        text: 'This workspace is wired for a live response once the AI Service (FastAPI) exposes a /insights endpoint — for now here is a preview based on the latest available data: revenue is trending up 18.2% month over month, with the freight-pallet SKU needing a reorder inside 5 days.'
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchInsights();
+        if (!cancelled && live.length > 0) {
+          setInsights(live);
+          setDataSource('live');
+        }
+      } catch {
+        // AI service or backend unavailable — keep showing the bundled sample insights.
       }
-    ]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const respond = async (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (!trimmed || isSending) return;
+    setMessages((current) => [...current, { role: 'user', text: trimmed }]);
     setInput('');
+    setSuggestions([]);
+    setIsSending(true);
+    try {
+      const { reply, suggestions: next } = await sendChatMessage(trimmed);
+      setMessages((current) => [...current, { role: 'assistant', text: reply }]);
+      setSuggestions(next.length > 0 ? next : starterPrompts);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        { role: 'assistant', text: 'Sorry, I couldn\'t reach the assistant just now. Please try again in a moment.' }
+      ]);
+      setSuggestions(starterPrompts);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI</p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI</p>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              dataSource === 'live'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : darkMode
+                  ? 'border-white/10 text-slate-400'
+                  : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+          </span>
+        </div>
         <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Assistant &amp; insights</h1>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {aiInsights.map((insight, index) => {
-          const Icon = categoryIcon[insight.category];
+        {insights.map((insight, index) => {
+          const Icon = categoryIcon[insight.category] ?? Sparkles;
+          const accent = categoryAccent[insight.category] ?? categoryAccent.Opportunity;
           return (
             <motion.div
               key={insight.id}
@@ -70,7 +115,7 @@ export default function AiAssistantPage() {
               className={`rounded-[24px] border p-5 ${cardClass}`}
             >
               <div className="flex items-center justify-between">
-                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${categoryAccent[insight.category]}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${accent}`}>
                   <Icon className="h-3.5 w-3.5" /> {insight.category}
                 </span>
                 <span className={`text-xs font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{insight.confidence}% confidence</span>
@@ -117,10 +162,13 @@ export default function AiAssistantPage() {
         </div>
 
         <div className={`flex flex-wrap gap-2 border-t px-5 py-3 ${darkMode ? 'border-white/10' : 'border-slate-100'}`}>
-          {starterPrompts.map((prompt) => (
+          {isSending && (
+            <span className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Thinking…</span>
+          )}
+          {suggestions.map((prompt) => (
             <button
               key={prompt}
-              onClick={() => respond(prompt)}
+              onClick={() => void respond(prompt)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${darkMode ? 'border-white/10 text-slate-300 hover:bg-white/5' : 'border-slate-200 text-slate-600 hover:bg-slate-100'}`}
             >
               <Sparkles className="h-3 w-3" /> {prompt}
@@ -131,7 +179,7 @@ export default function AiAssistantPage() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            respond(input);
+            void respond(input);
           }}
           className={`flex items-center gap-2 border-t px-5 py-4 ${darkMode ? 'border-white/10' : 'border-slate-100'}`}
         >
@@ -143,7 +191,8 @@ export default function AiAssistantPage() {
           />
           <button
             type="submit"
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}
+            disabled={isSending}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-full disabled:opacity-50 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}
             aria-label="Send"
           >
             <Send className="h-4 w-4" />

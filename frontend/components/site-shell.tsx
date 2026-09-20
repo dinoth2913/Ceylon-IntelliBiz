@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { ArrowRight, Bot, Sparkles } from 'lucide-react';
+import { API_BASE_URL } from '@/lib/auth';
 
 type SiteShellProps = {
   children: React.ReactNode;
@@ -25,29 +26,40 @@ const initialFormState = {
   name: '',
   email: '',
   company: '',
-  message: ''
+  message: '',
+  // Honeypot: hidden from people, so only bots fill it in.
+  website: ''
 };
+
+type SubmitState = 'idle' | 'sending' | 'sent' | 'error';
 
 export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo', ctaHref = '/#contact' }: SiteShellProps) {
   const [formState, setFormState] = useState(initialFormState);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>('idle');
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
     setFormState((current) => ({ ...current, [name]: value }));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitState === 'sending') return;
 
-    if (!formState.name || !formState.email || !formState.company) {
-      setSubmitted(false);
-      return;
+    setSubmitState('sending');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/contact-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formState),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      setSubmitState('sent');
+      setFormState(initialFormState);
+    } catch {
+      setSubmitState('error');
     }
-
-    window.localStorage.setItem('ceylon-demo-request', JSON.stringify({ ...formState, submittedAt: new Date().toISOString() }));
-    setSubmitted(true);
-    setFormState(initialFormState);
   };
 
   return (
@@ -96,12 +108,19 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
             </div>
 
             <form onSubmit={handleSubmit} className="rounded-[24px] border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+              <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+                <label>
+                  Leave this field empty
+                  <input type="text" name="website" value={formState.website} onChange={handleChange} tabIndex={-1} autoComplete="off" />
+                </label>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-medium text-slate-200">
                   Name
                   <input
                     type="text"
                     name="name"
+                    maxLength={255}
                     value={formState.name}
                     onChange={handleChange}
                     placeholder="Asha Perera"
@@ -114,6 +133,7 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
                   <input
                     type="email"
                     name="email"
+                    maxLength={255}
                     value={formState.email}
                     onChange={handleChange}
                     placeholder="you@company.com"
@@ -128,6 +148,7 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
                 <input
                   type="text"
                   name="company"
+                  maxLength={255}
                   value={formState.company}
                   onChange={handleChange}
                   placeholder="Your company"
@@ -140,6 +161,7 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
                 What are you looking to improve?
                 <textarea
                   name="message"
+                  maxLength={2000}
                   value={formState.message}
                   onChange={handleChange}
                   placeholder="Tell us about your workflow, growth goals, or operational challenge."
@@ -151,12 +173,17 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="submit"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-400 px-5 py-3 font-medium text-slate-950 transition hover:bg-cyan-300"
+                  disabled={submitState === 'sending'}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-400 px-5 py-3 font-medium text-slate-950 transition hover:bg-cyan-300 disabled:opacity-70"
                 >
-                  {submitted ? 'Request received' : 'Request a demo'} <ArrowRight className="h-4 w-4" />
+                  {submitState === 'sending' ? 'Sending…' : submitState === 'sent' ? 'Request received' : 'Request a demo'} <ArrowRight className="h-4 w-4" />
                 </button>
-                <p className="text-sm text-slate-400">
-                  {submitted ? 'Thanks — we will reach out shortly.' : 'No spam. Just a tailored follow-up.'}
+                <p role="status" className={`text-sm ${submitState === 'error' ? 'text-rose-300' : 'text-slate-400'}`}>
+                  {submitState === 'sent'
+                    ? 'Thanks — we will reach out shortly.'
+                    : submitState === 'error'
+                      ? 'We could not send your request. Please try again, or email hello@ceylonintellibiz.com.'
+                      : 'No spam. Just a tailored follow-up.'}
                 </p>
               </div>
             </form>
@@ -169,6 +196,9 @@ export function SiteShell({ children, title, subtitle, ctaLabel = 'Book a demo',
             <Link href="/marketplace" className="transition hover:text-slate-900">Marketplace</Link>
             <Link href="/solutions" className="transition hover:text-slate-900">Solutions</Link>
             <Link href="/insights" className="transition hover:text-slate-900">Insights</Link>
+            <Link href="/privacy" className="transition hover:text-slate-900">Privacy</Link>
+            <Link href="/security" className="transition hover:text-slate-900">Security</Link>
+            <Link href="/contact" className="transition hover:text-slate-900">Contact</Link>
           </div>
         </footer>
       </div>

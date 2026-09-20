@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Phone, Plus, Radio, Search, UserPlus, X } from 'lucide-react';
-import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
+import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch } from '@/lib/auth';
+import { canWrite } from '@/lib/roles';
 import { customers as seedCustomers, formatLkr, type CustomerRecord } from '@/lib/dashboard-data';
 
 const segments = ['All', 'Enterprise', 'SME', 'Retail'] as const;
@@ -50,6 +51,8 @@ function mapCustomer(record: BackendCustomer): CustomerRecord {
 
 export default function CustomersPage() {
   const { darkMode } = useDashboardTheme();
+  const { user } = useDashboardUser();
+  const canAdd = canWrite('customers', user?.role);
   const [customers, setCustomers] = useState<CustomerRecord[]>(seedCustomers);
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [query, setQuery] = useState('');
@@ -145,16 +148,16 @@ export default function CustomersPage() {
           </div>
           <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Customers</h1>
         </div>
-        <button
+        {canAdd && <button
           onClick={() => setShowForm((value) => !value)}
           className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
         >
           {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           {showForm ? 'Close' : 'Add customer'}
-        </button>
+        </button>}
       </div>
 
-      {showForm && (
+      {canAdd && showForm && (
         <motion.form
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
   Bot,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,15 +15,18 @@ import {
   Package,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Store,
   Sun,
   Users,
   Wallet,
   X,
   ArrowLeft
 } from 'lucide-react';
-import { getSession, logout, type AuthUser } from '@/lib/auth';
+import { getSession, logout, refreshUser, type AuthUser } from '@/lib/auth';
+import { ROLE_DESCRIPTIONS, canViewRoute, hasBusinessAccess, normaliseRole, roleLabel, type Role } from '@/lib/roles';
 
 type DashboardThemeContextValue = {
   darkMode: boolean;
@@ -38,13 +42,23 @@ export function useDashboardTheme() {
   return useContext(DashboardThemeContext);
 }
 
+const DashboardUserContext = createContext<{ user: AuthUser | null }>({ user: null });
+
+/** The signed-in user, with the role as the server last reported it. */
+export function useDashboardUser() {
+  return useContext(DashboardUserContext);
+}
+
 const navItems = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Customers', href: '/dashboard/customers', icon: Users },
+  { label: 'Demo requests', href: '/dashboard/leads', icon: Inbox },
   { label: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package },
+  { label: 'Vendors', href: '/dashboard/vendors', icon: Store },
   { label: 'Finance', href: '/dashboard/finance', icon: Wallet },
-  { label: 'AI Assistant', href: '/dashboard/ai', icon: Bot }
+  { label: 'AI Assistant', href: '/dashboard/ai', icon: Bot },
+  { label: 'Team', href: '/dashboard/team', icon: ShieldCheck }
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -74,6 +88,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       return;
     }
     setUser(session.user);
+
+    // The role in the stored session can be stale (an admin may have changed it since login),
+    // so ask the server. If the session turned out to be invalid, apiFetch has already cleared it.
+    let cancelled = false;
+    refreshUser().then((fresh) => {
+      if (cancelled) return;
+      if (fresh) setUser(fresh);
+      else if (!getSession()) router.replace('/auth');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const toggleDarkMode = () => setDarkMode((value) => !value);
@@ -82,6 +108,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     logout();
     router.push('/');
   };
+
+  const visibleNav = user ? navItems.filter((item) => canViewRoute(item.href, user.role)) : [];
+  const allowedHere = user ? canViewRoute(pathname, user.role) : false;
 
   const initials = user?.username
     ? user.username.slice(0, 2).toUpperCase()
@@ -101,6 +130,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <DashboardThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
+      <DashboardUserContext.Provider value={{ user }}>
       <div className={`min-h-screen ${pageBg}`}>
         <div className="mx-auto flex max-w-[1600px]">
           {/* Desktop sidebar */}
@@ -116,7 +146,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Link>
 
             <nav className="mt-8 flex flex-1 flex-col gap-1">
-              {navItems.map((item) => {
+              {visibleNav.map((item) => {
                 const Icon = item.icon;
                 const active = pathname === item.href;
                 return (
@@ -186,7 +216,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     </button>
                   </div>
                   <nav className="mt-6 flex flex-1 flex-col gap-1">
-                    {navItems.map((item) => {
+                    {visibleNav.map((item) => {
                       const Icon = item.icon;
                       const active = pathname === item.href;
                       return (
@@ -254,7 +284,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-xs font-semibold text-white">{initials}</span>
                 <div className="leading-tight">
                   <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{user?.username ?? 'Signing in…'}</p>
-                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user?.role ?? '—'}</p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{user ? roleLabel(user.role).replace(' (no access yet)', '') : '—'}</p>
                 </div>
               </div>
 
@@ -266,10 +296,43 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </button>
             </header>
 
-            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              {user && (allowedHere ? children : <AccessNotice role={user.role} darkMode={darkMode} />)}
+            </main>
           </div>
         </div>
       </div>
+      </DashboardUserContext.Provider>
     </DashboardThemeContext.Provider>
+  );
+}
+
+function AccessNotice({ role, darkMode }: { role: string; darkMode: boolean }) {
+  const pending = !hasBusinessAccess(role);
+  const key = normaliseRole(role) as Role;
+  return (
+    <div className={`mx-auto mt-10 max-w-lg rounded-[28px] border p-8 text-center ${darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm'}`}>
+      <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${darkMode ? 'bg-cyan-400/10 text-cyan-300' : 'bg-slate-950 text-white'}`}>
+        <ShieldCheck className="h-5 w-5" />
+      </span>
+      <h1 className={`mt-4 text-xl font-semibold ${darkMode ? 'text-white' : 'text-slate-950'}`}>
+        {pending ? 'Your account is waiting for access' : "You don't have access to this page"}
+      </h1>
+      <p className={`mt-2 text-sm leading-6 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+        {pending
+          ? 'You are signed in, but an admin still needs to give you a role before you can see business data. Ask your admin to assign you Sales or Finance access.'
+          : `Your role (${roleLabel(role)}) can't open this page. ${ROLE_DESCRIPTIONS[key] ?? ''}`}
+      </p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Link href="/dashboard/settings" className={`rounded-full px-4 py-2 text-sm font-medium ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+          Open settings
+        </Link>
+        {!pending && (
+          <Link href="/dashboard" className={`rounded-full border px-4 py-2 text-sm font-medium ${darkMode ? 'border-white/10 text-slate-200' : 'border-slate-200 text-slate-700'}`}>
+            Back to overview
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }

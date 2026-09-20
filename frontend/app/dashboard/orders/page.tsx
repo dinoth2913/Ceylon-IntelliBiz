@@ -1,18 +1,78 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Radio, Search } from 'lucide-react';
 import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
-import { formatLkr, orders } from '@/lib/dashboard-data';
+import { apiFetch } from '@/lib/auth';
+import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboard-data';
 
 const statuses = ['All', 'Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
 
+type BackendOrder = {
+  id: number;
+  orderNumber: string;
+  customerId: number | null;
+  totalAmount: number;
+  status: string;
+  createdAt: string | null;
+};
+
+type BackendCustomer = { id: number; fullName: string };
+
+function formatDate(iso: string | null) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapOrder(record: BackendOrder, customerNames: Map<number, string>): OrderRecord {
+  return {
+    id: record.orderNumber,
+    customer: customerNames.get(record.customerId ?? -1) ?? 'Unknown customer',
+    // The orders table doesn't track item count or sales channel yet, so live
+    // records get sensible defaults until the schema grows to cover them.
+    items: 1,
+    total: record.totalAmount,
+    status: (record.status as OrderRecord['status']) ?? 'Processing',
+    channel: 'Direct sales',
+    date: formatDate(record.createdAt)
+  };
+}
+
 export default function OrdersPage() {
   const { darkMode } = useDashboardTheme();
+  const [orders, setOrders] = useState<OrderRecord[]>(seedOrders);
+  const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [status, setStatus] = useState<(typeof statuses)[number]>('All');
   const [query, setQuery] = useState('');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [ordersResponse, customersResponse] = await Promise.all([
+          apiFetch('/api/orders'),
+          apiFetch('/api/customers')
+        ]);
+        if (!ordersResponse.ok) return;
+        const ordersData: BackendOrder[] = await ordersResponse.json();
+        const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
+        const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
+        if (!cancelled && Array.isArray(ordersData)) {
+          setOrders(ordersData.length > 0 ? ordersData.map((order) => mapOrder(order, customerNames)) : seedOrders);
+          setDataSource('live');
+        }
+      } catch {
+        // Backend not reachable — keep showing the bundled sample data.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     return orders.filter((order) => {
@@ -20,7 +80,7 @@ export default function OrdersPage() {
       const matchesQuery = query.trim() === '' || order.customer.toLowerCase().includes(query.toLowerCase()) || order.id.toLowerCase().includes(query.toLowerCase());
       return matchesStatus && matchesQuery;
     });
-  }, [status, query]);
+  }, [orders, status, query]);
 
   const totals = {
     processing: orders.filter((o) => o.status === 'Processing').length,
@@ -31,7 +91,20 @@ export default function OrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Sales</p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Sales</p>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              dataSource === 'live'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : darkMode
+                  ? 'border-white/10 text-slate-400'
+                  : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+          </span>
+        </div>
         <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Orders</h1>
       </div>
 
@@ -41,7 +114,7 @@ export default function OrdersPage() {
           <p className={`mt-1 text-2xl font-semibold ${darkMode ? 'text-white' : 'text-slate-950'}`}>{totals.processing}</p>
         </div>
         <div className={`rounded-[20px] border p-4 ${cardClass}`}>
-          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Fulfilled this week</p>
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Fulfilled</p>
           <p className={`mt-1 text-2xl font-semibold ${darkMode ? 'text-white' : 'text-slate-950'}`}>{totals.fulfilled}</p>
         </div>
         <div className={`rounded-[20px] border p-4 ${cardClass}`}>

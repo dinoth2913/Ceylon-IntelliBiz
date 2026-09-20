@@ -1,14 +1,74 @@
 'use client';
 
-import { CircleDollarSign, FileWarning, ReceiptText, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CircleDollarSign, FileWarning, Radio, ReceiptText, Wallet } from 'lucide-react';
 import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusBadge } from '@/components/dashboard/status-badge';
-import { formatLkr, invoices } from '@/lib/dashboard-data';
+import { apiFetch } from '@/lib/auth';
+import { invoices as seedInvoices, formatLkr, type InvoiceRecord } from '@/lib/dashboard-data';
+
+type BackendInvoice = {
+  id: number;
+  invoiceNumber: string;
+  customerId: number | null;
+  totalAmount: number;
+  status: string;
+  createdAt: string | null;
+};
+
+type BackendCustomer = { id: number; fullName: string };
+
+function formatDate(iso: string | null) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapInvoice(record: BackendInvoice, customerNames: Map<number, string>): InvoiceRecord {
+  return {
+    id: record.invoiceNumber,
+    customer: customerNames.get(record.customerId ?? -1) ?? 'Unknown customer',
+    amount: record.totalAmount,
+    status: (record.status as InvoiceRecord['status']) ?? 'Draft',
+    issued: formatDate(record.createdAt),
+    // The invoices table doesn't track a due date yet, so live records show
+    // "—" until the Finance Service schema grows to cover it.
+    due: '—'
+  };
+}
 
 export default function FinancePage() {
   const { darkMode } = useDashboardTheme();
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>(seedInvoices);
+  const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [invoicesResponse, customersResponse] = await Promise.all([
+          apiFetch('/api/invoices'),
+          apiFetch('/api/customers')
+        ]);
+        if (!invoicesResponse.ok) return;
+        const invoicesData: BackendInvoice[] = await invoicesResponse.json();
+        const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
+        const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
+        if (!cancelled && Array.isArray(invoicesData)) {
+          setInvoices(invoicesData.length > 0 ? invoicesData.map((invoice) => mapInvoice(invoice, customerNames)) : seedInvoices);
+          setDataSource('live');
+        }
+      } catch {
+        // Backend not reachable — keep showing the bundled sample data.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const paid = invoices.filter((i) => i.status === 'Paid').reduce((sum, i) => sum + i.amount, 0);
   const outstanding = invoices.filter((i) => i.status === 'Outstanding').reduce((sum, i) => sum + i.amount, 0);
@@ -17,15 +77,28 @@ export default function FinancePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Finance</p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Finance</p>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              dataSource === 'live'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : darkMode
+                  ? 'border-white/10 text-slate-400'
+                  : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+          </span>
+        </div>
         <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Invoices &amp; billing</h1>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Collected this month" value={formatLkr(paid)} trend="+11.4%" icon={CircleDollarSign} accent="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300" index={0} />
-        <StatCard label="Outstanding" value={formatLkr(outstanding)} trend="-4.6%" trendDirection="down" icon={Wallet} accent="border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300" index={1} />
-        <StatCard label="Overdue" value={formatLkr(overdue)} trend="+2.1%" icon={FileWarning} accent="border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300" index={2} />
-        <StatCard label="Invoices issued" value={String(invoices.length)} trend="+3" icon={ReceiptText} accent="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300" index={3} />
+        <StatCard label="Collected" value={formatLkr(paid)} icon={CircleDollarSign} accent="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300" index={0} />
+        <StatCard label="Outstanding" value={formatLkr(outstanding)} icon={Wallet} accent="border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300" index={1} />
+        <StatCard label="Overdue" value={formatLkr(overdue)} icon={FileWarning} accent="border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300" index={2} />
+        <StatCard label="Invoices issued" value={String(invoices.length)} icon={ReceiptText} accent="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300" index={3} />
       </div>
 
       <div className={`overflow-hidden rounded-[24px] border ${cardClass}`}>
@@ -58,8 +131,8 @@ export default function FinancePage() {
       </div>
 
       <div className={`rounded-[24px] border p-5 text-sm ${cardClass} ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-        Connected gateways: PayHere, Stripe, and Genie are referenced in the platform architecture but not yet wired to this
-        screen — invoices shown here are illustrative until the Finance Service API is implemented.
+        Payment gateways (PayHere, Stripe and Genie) are not connected yet, so payments can&apos;t be collected through the
+        platform.
       </div>
     </div>
   );
