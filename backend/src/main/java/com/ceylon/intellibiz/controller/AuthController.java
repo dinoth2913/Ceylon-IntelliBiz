@@ -7,9 +7,11 @@ import com.ceylon.intellibiz.dto.RegisterRequest;
 import com.ceylon.intellibiz.model.User;
 import com.ceylon.intellibiz.repository.UserRepository;
 import com.ceylon.intellibiz.security.JwtService;
+import com.ceylon.intellibiz.security.Roles;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +21,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    static final String DEFAULT_ROLE = Roles.STAFF;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -43,7 +47,8 @@ public class AuthController {
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRole(request.getRole() == null || request.getRole().isBlank() ? "STAFF" : request.getRole());
+        // Public sign-up must never choose its own privileges: any "role" in the request body is ignored.
+        user.setRole(DEFAULT_ROLE);
         user.setCreatedAt(Instant.now());
         User saved = userRepository.save(user);
 
@@ -65,14 +70,10 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(token, user.getId(), user.getUsername(), user.getEmail(), user.getRole()));
     }
 
+    /** The signed-in user as stored now, so the UI picks up a role change without a fresh login. */
     @GetMapping("/me")
-    public ResponseEntity<?> me(@RequestHeader(value = "Authorization", required = false) String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiError("Missing bearer token"));
-        }
-        var claims = jwtService.parseClaims(authorization.substring(7));
-        String username = claims.getSubject();
-        return userRepository.findByUsername(username)
+    public ResponseEntity<?> me(Authentication authentication) {
+        return userRepository.findByUsername(authentication.getName())
             .<ResponseEntity<?>>map(user -> ResponseEntity.ok(new AuthResponse(null, user.getId(), user.getUsername(), user.getEmail(), user.getRole())))
             .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("User not found")));
     }

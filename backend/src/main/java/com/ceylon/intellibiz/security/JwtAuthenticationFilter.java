@@ -1,5 +1,7 @@
 package com.ceylon.intellibiz.security;
 
+import com.ceylon.intellibiz.model.User;
+import com.ceylon.intellibiz.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,14 +16,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -36,13 +41,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 Claims claims = jwtService.parseClaims(token);
-                String username = claims.getSubject();
-                String role = claims.get("role", String.class);
 
                 if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-                    var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    // The role comes from the database, not the token, so an admin changing someone's role
+                    // (or deleting them) takes effect on their very next request instead of when the token expires.
+                    Optional<User> user = userRepository.findByUsername(claims.getSubject());
+                    if (user.isPresent()) {
+                        var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + Roles.normalise(user.get().getRole())));
+                        var authentication = new UsernamePasswordAuthenticationToken(user.get().getUsername(), null, authorities);
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
                 }
             } catch (Exception ignored) {
                 // Invalid or expired token: leave the security context empty so downstream
