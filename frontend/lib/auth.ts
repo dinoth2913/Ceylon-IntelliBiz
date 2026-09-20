@@ -1,5 +1,5 @@
 export type AuthUser = {
-  userId: number;
+  userId: string;
   username: string;
   email: string;
   role: string;
@@ -44,7 +44,7 @@ export function clearSession() {
 
 type BackendAuthResponse = {
   token: string;
-  userId: number;
+  userId: string;
   username: string;
   email: string;
   role: string;

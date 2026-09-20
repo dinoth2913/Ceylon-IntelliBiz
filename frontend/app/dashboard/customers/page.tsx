@@ -6,13 +6,14 @@ import { Mail, Phone, Plus, Radio, Search, UserPlus, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch } from '@/lib/auth';
+import { shortId } from '@/lib/utils';
 import { canWrite } from '@/lib/roles';
 import { customers as seedCustomers, formatLkr, type CustomerRecord } from '@/lib/dashboard-data';
 
 const segments = ['All', 'Enterprise', 'SME', 'Retail'] as const;
 
 type BackendCustomer = {
-  id: number;
+  id: string;
   fullName: string;
   companyName: string | null;
   email: string | null;
@@ -34,7 +35,7 @@ function relativeTime(iso: string | null) {
 
 function mapCustomer(record: BackendCustomer): CustomerRecord {
   return {
-    id: `CUS-${record.id}`,
+    id: `CUS-${shortId(record.id)}`,
     name: record.fullName,
     company: record.companyName ?? '—',
     email: record.email ?? '—',
@@ -70,7 +71,7 @@ export default function CustomersPage() {
         if (!response.ok) return;
         const data: BackendCustomer[] = await response.json();
         if (!cancelled && Array.isArray(data)) {
-          setCustomers(data.length > 0 ? data.map(mapCustomer) : seedCustomers);
+          setCustomers(data.map(mapCustomer));
           setDataSource('live');
         }
       } catch {
@@ -104,7 +105,7 @@ export default function CustomersPage() {
       });
       if (!response.ok) throw new Error('Request failed');
       const saved: BackendCustomer = await response.json();
-      setCustomers((current) => [mapCustomer(saved), ...current]);
+      setCustomers((current) => [mapCustomer(saved), ...(dataSource === 'live' ? current : [])]);
       setDataSource('live');
     } catch {
       // No backend available yet — add it locally so the workspace still feels responsive.
@@ -247,7 +248,7 @@ export default function CustomersPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    No customers match your filters.
+                    {customers.length === 0 ? 'No customers yet. Use "Add customer" to create your first one.' : 'No customers match your filters.'}
                   </td>
                 </tr>
               )}

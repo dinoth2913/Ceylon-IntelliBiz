@@ -9,15 +9,15 @@ import { apiFetch } from '@/lib/auth';
 import { invoices as seedInvoices, formatLkr, type InvoiceRecord } from '@/lib/dashboard-data';
 
 type BackendInvoice = {
-  id: number;
+  id: string;
   invoiceNumber: string;
-  customerId: number | null;
+  customerId: string | null;
   totalAmount: number;
   status: string;
   createdAt: string | null;
 };
 
-type BackendCustomer = { id: number; fullName: string };
+type BackendCustomer = { id: string; fullName: string };
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -26,10 +26,10 @@ function formatDate(iso: string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function mapInvoice(record: BackendInvoice, customerNames: Map<number, string>): InvoiceRecord {
+function mapInvoice(record: BackendInvoice, customerNames: Map<string, string>): InvoiceRecord {
   return {
     id: record.invoiceNumber,
-    customer: customerNames.get(record.customerId ?? -1) ?? 'Unknown customer',
+    customer: customerNames.get(record.customerId ?? '') ?? 'Unknown customer',
     amount: record.totalAmount,
     status: (record.status as InvoiceRecord['status']) ?? 'Draft',
     issued: formatDate(record.createdAt),
@@ -58,7 +58,7 @@ export default function FinancePage() {
         const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
         const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
         if (!cancelled && Array.isArray(invoicesData)) {
-          setInvoices(invoicesData.length > 0 ? invoicesData.map((invoice) => mapInvoice(invoice, customerNames)) : seedInvoices);
+          setInvoices(invoicesData.map((invoice) => mapInvoice(invoice, customerNames)));
           setDataSource('live');
         }
       } catch {
@@ -125,6 +125,13 @@ export default function FinancePage() {
                   <td className="px-5 py-3.5"><StatusBadge status={invoice.status} darkMode={darkMode} /></td>
                 </tr>
               ))}
+              {invoices.length === 0 && (
+                <tr>
+                  <td colSpan={6} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    No invoices yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -34,7 +34,7 @@ const sections = [
     id: 'storage',
     title: 'Where it is kept',
     body: [
-      'Account and business records are stored in the platform database. Demo requests are stored there too and can only be read by signed-in team members. Assistant conversations are stored separately in a document database and are grouped by a random conversation identifier.',
+      'Everything is kept in the platform database: your account, the business records you enter, demo requests and assistant conversations. Demo requests can only be read by team members with the right role, and conversations are grouped by a random conversation identifier.',
       'Read more about the protections in place on our Security page.'
     ]
   },

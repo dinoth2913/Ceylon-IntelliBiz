@@ -11,6 +11,7 @@ import { BarList } from '@/components/dashboard/bar-list';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch, getSession } from '@/lib/auth';
 import { fetchInsights } from '@/lib/ai';
+import { shortId } from '@/lib/utils';
 import {
   activity,
   aiInsights as sampleInsights,
@@ -36,10 +37,10 @@ type Snapshot = {
   stock: StockRow[];
 };
 
-type BackendCustomer = { id: number; fullName: string };
-type BackendOrder = { id: number; orderNumber: string; customerId: number | null; totalAmount: number; status: string; createdAt: string | null };
+type BackendCustomer = { id: string; fullName: string };
+type BackendOrder = { id: string; orderNumber: string; customerId: string | null; totalAmount: number; status: string; createdAt: string | null };
 type BackendInvoice = { totalAmount: number; status: string };
-type BackendInventoryItem = { id: number; name: string; warehouse: string | null; stockQuantity: number | null; reorderLevel: number | null };
+type BackendInventoryItem = { id: string; name: string; warehouse: string | null; stockQuantity: number | null; reorderLevel: number | null };
 
 const sampleSnapshot: Snapshot = {
   customers: sampleCustomers.length,
@@ -69,13 +70,13 @@ async function loadLiveSnapshot(): Promise<Snapshot | null> {
       customers: customers.length,
       orders: newestFirst.map((order) => ({
         id: order.orderNumber,
-        customer: names.get(order.customerId ?? -1) ?? 'Unknown customer',
+        customer: names.get(order.customerId ?? '') ?? 'Unknown customer',
         total: order.totalAmount,
         status: order.status
       })),
       invoices: invoices.map((invoice) => ({ amount: invoice.totalAmount, status: invoice.status })),
       stock: inventory.map((item) => ({
-        id: `INV-${item.id}`,
+        id: `INV-${shortId(item.id)}`,
         name: item.name,
         warehouse: item.warehouse ?? '—',
         stock: item.stockQuantity ?? 0,

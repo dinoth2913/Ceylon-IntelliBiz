@@ -7,7 +7,7 @@ import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
 import { apiFetch } from '@/lib/auth';
 
 type ContactRequest = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   company: string;

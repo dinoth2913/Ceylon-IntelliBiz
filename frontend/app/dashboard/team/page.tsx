@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/auth';
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, normaliseRole, type Role } from '@/lib/roles';
 
 type TeamMember = {
-  id: number;
+  id: string;
   username: string;
   email: string;
   role: string;
@@ -37,7 +37,7 @@ export default function TeamPage() {
   const { user } = useDashboardUser();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [state, setState] = useState<LoadState>('loading');
-  const [savingId, setSavingId] = useState<number | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {

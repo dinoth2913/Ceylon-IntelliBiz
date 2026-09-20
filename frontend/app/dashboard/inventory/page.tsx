@@ -5,10 +5,11 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, PackageCheck, Radio } from 'lucide-react';
 import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
 import { apiFetch } from '@/lib/auth';
+import { shortId } from '@/lib/utils';
 import { inventory as seedInventory, formatLkr, type InventoryRecord } from '@/lib/dashboard-data';
 
 type BackendInventoryItem = {
-  id: number;
+  id: string;
   sku: string;
   name: string;
   category: string | null;
@@ -20,7 +21,7 @@ type BackendInventoryItem = {
 
 function mapInventoryItem(record: BackendInventoryItem): InventoryRecord {
   return {
-    id: `INV-${record.id}`,
+    id: `INV-${shortId(record.id)}`,
     sku: record.sku,
     name: record.name,
     category: record.category ?? 'Uncategorized',
@@ -45,7 +46,7 @@ export default function InventoryPage() {
         if (!response.ok) return;
         const data: BackendInventoryItem[] = await response.json();
         if (!cancelled && Array.isArray(data)) {
-          setInventory(data.length > 0 ? data.map(mapInventoryItem) : seedInventory);
+          setInventory(data.map(mapInventoryItem));
           setDataSource('live');
         }
       } catch {
@@ -94,6 +95,12 @@ export default function InventoryPage() {
           <p className={`mt-1 text-2xl font-semibold ${darkMode ? 'text-white' : 'text-slate-950'}`}>{formatLkr(totalValue)}</p>
         </div>
       </div>
+
+      {inventory.length === 0 && (
+        <div className={`rounded-[24px] border p-8 text-center text-sm ${cardClass} ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          No inventory items yet.
+        </div>
+      )}
 
       <div className="grid gap-4">
         {inventory.map((item, index) => {

@@ -10,15 +10,15 @@ import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboa
 const statuses = ['All', 'Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
 
 type BackendOrder = {
-  id: number;
+  id: string;
   orderNumber: string;
-  customerId: number | null;
+  customerId: string | null;
   totalAmount: number;
   status: string;
   createdAt: string | null;
 };
 
-type BackendCustomer = { id: number; fullName: string };
+type BackendCustomer = { id: string; fullName: string };
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -27,10 +27,10 @@ function formatDate(iso: string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function mapOrder(record: BackendOrder, customerNames: Map<number, string>): OrderRecord {
+function mapOrder(record: BackendOrder, customerNames: Map<string, string>): OrderRecord {
   return {
     id: record.orderNumber,
-    customer: customerNames.get(record.customerId ?? -1) ?? 'Unknown customer',
+    customer: customerNames.get(record.customerId ?? '') ?? 'Unknown customer',
     // The orders table doesn't track item count or sales channel yet, so live
     // records get sensible defaults until the schema grows to cover them.
     items: 1,
@@ -62,7 +62,7 @@ export default function OrdersPage() {
         const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
         const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
         if (!cancelled && Array.isArray(ordersData)) {
-          setOrders(ordersData.length > 0 ? ordersData.map((order) => mapOrder(order, customerNames)) : seedOrders);
+          setOrders(ordersData.map((order) => mapOrder(order, customerNames)));
           setDataSource('live');
         }
       } catch {
@@ -178,7 +178,7 @@ export default function OrdersPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    No orders match your filters.
+                    {orders.length === 0 ? 'No orders yet.' : 'No orders match your filters.'}
                   </td>
                 </tr>
               )}

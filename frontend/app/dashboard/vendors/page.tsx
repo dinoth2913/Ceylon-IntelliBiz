@@ -5,11 +5,12 @@ import { motion } from 'framer-motion';
 import { Building2, Mail, Phone, Plus, Radio, Search, UserRound, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { apiFetch } from '@/lib/auth';
+import { shortId } from '@/lib/utils';
 import { canWrite } from '@/lib/roles';
 import { vendors as seedVendors, type VendorRecord } from '@/lib/dashboard-data';
 
 type BackendVendor = {
-  id: number;
+  id: string;
   companyName: string;
   contactName: string | null;
   email: string | null;
@@ -26,7 +27,7 @@ function formatDate(iso: string | null) {
 
 function mapVendor(record: BackendVendor): VendorRecord {
   return {
-    id: `VEN-${record.id}`,
+    id: `VEN-${shortId(record.id)}`,
     company: record.companyName,
     contact: record.contactName ?? '—',
     email: record.email ?? '—',
