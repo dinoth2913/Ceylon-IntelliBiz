@@ -1,8 +1,12 @@
 package com.ceylon.intellibiz.controller;
 
+import com.ceylon.intellibiz.dto.ApiError;
 import com.ceylon.intellibiz.model.Customer;
 import com.ceylon.intellibiz.repository.CustomerRepository;
+import com.ceylon.intellibiz.repository.InvoiceRepository;
+import com.ceylon.intellibiz.repository.OrderRepository;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,9 +18,17 @@ import java.util.List;
 public class CustomerController {
 
     private final CustomerRepository customerRepository;
+    private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
 
-    public CustomerController(CustomerRepository customerRepository) {
+    public CustomerController(
+        CustomerRepository customerRepository,
+        OrderRepository orderRepository,
+        InvoiceRepository invoiceRepository
+    ) {
         this.customerRepository = customerRepository;
+        this.orderRepository = orderRepository;
+        this.invoiceRepository = invoiceRepository;
     }
 
     @GetMapping
@@ -28,7 +40,7 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Customer> getCustomer(@PathVariable Long id) {
+    public ResponseEntity<Customer> getCustomer(@PathVariable String id) {
         return customerRepository.findById(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
@@ -42,7 +54,7 @@ public class CustomerController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Customer> updateCustomer(@PathVariable Long id, @Valid @RequestBody Customer update) {
+    public ResponseEntity<Customer> updateCustomer(@PathVariable String id, @Valid @RequestBody Customer update) {
         return customerRepository.findById(id)
             .map(existing -> {
                 existing.setFullName(update.getFullName());
@@ -54,10 +66,15 @@ public class CustomerController {
             .orElse(ResponseEntity.notFound().build());
     }
 
+    /** Mongo has no foreign keys, so refuse to leave orders or invoices pointing at a customer that no longer exists. */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
+    public ResponseEntity<?> deleteCustomer(@PathVariable String id) {
         if (!customerRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
+        }
+        if (orderRepository.existsByCustomerId(id) || invoiceRepository.existsByCustomerId(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("This customer has orders or invoices, so it can't be deleted."));
         }
         customerRepository.deleteById(id);
         return ResponseEntity.noContent().build();

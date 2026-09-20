@@ -29,13 +29,13 @@ public class UserAdminController {
     @GetMapping
     public List<UserSummary> listUsers() {
         return userRepository.findAll().stream()
-            .sorted(Comparator.comparing(User::getId))
+            .sorted(Comparator.comparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(User::getId))
             .map(UserSummary::from)
             .toList();
     }
 
     @PutMapping("/{id}/role")
-    public ResponseEntity<?> updateRole(@PathVariable Long id, @Valid @RequestBody RoleUpdateRequest request) {
+    public ResponseEntity<?> updateRole(@PathVariable String id, @Valid @RequestBody RoleUpdateRequest request) {
         String newRole = Roles.normalise(request.role());
         if (!Roles.ASSIGNABLE.contains(newRole)) {
             return ResponseEntity.badRequest().body(new ApiError("Role must be one of: " + String.join(", ", Roles.ASSIGNABLE)));

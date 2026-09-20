@@ -59,7 +59,7 @@ class ContactRequestApiTest {
                 (proxy, method, args) -> switch (method.getName()) {
                     case "save" -> {
                         ContactRequest saved = (ContactRequest) args[0];
-                        saved.setId((long) STORE.size() + 1);
+                        saved.setId(String.valueOf(STORE.size() + 1));
                         STORE.add(saved);
                         yield saved;
                     }

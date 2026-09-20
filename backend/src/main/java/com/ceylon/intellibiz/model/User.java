@@ -1,37 +1,34 @@
 package com.ceylon.intellibiz.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "users")
+@Document(collection = "users")
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Indexed(unique = true)
     private String username;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Indexed(unique = true)
     private String email;
 
     @JsonIgnore
-    @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(nullable = false, length = 50)
     private String role = "STAFF";
 
-    @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 }

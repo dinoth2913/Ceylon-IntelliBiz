@@ -1,10 +1,16 @@
 package com.ceylon.intellibiz.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
+import org.springframework.data.mongodb.core.mapping.FieldType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -12,28 +18,28 @@ import java.time.Instant;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "orders")
+@Document(collection = "orders")
 public class Order {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
     @NotBlank
-    @Column(name = "order_number", nullable = false, unique = true, length = 100)
+    @Indexed(unique = true)
     private String orderNumber;
 
-    @Column(name = "customer_id")
-    private Long customerId;
+    /** The customer this order belongs to (a customers._id). Checked by the controller, since Mongo has no foreign keys. */
+    @Indexed
+    private String customerId;
 
-    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
+    // Decimal128 keeps money exact; without this Spring Data would store the amount as text.
+    @NotNull
+    @PositiveOrZero
+    @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal totalAmount;
 
     @NotBlank
-    @Column(nullable = false, length = 50)
     private String status = "Processing";
 
-    @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 }

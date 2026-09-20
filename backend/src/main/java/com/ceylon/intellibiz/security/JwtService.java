@@ -43,7 +43,7 @@ public class JwtService {
         return secret;
     }
 
-    public String generateToken(Long userId, String username, String role) {
+    public String generateToken(String userId, String username, String role) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 

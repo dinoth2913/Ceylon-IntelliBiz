@@ -25,7 +25,7 @@ public class VendorController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Vendor> getVendor(@PathVariable Long id) {
+    public ResponseEntity<Vendor> getVendor(@PathVariable String id) {
         return vendorRepository.findById(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
@@ -39,7 +39,7 @@ public class VendorController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Vendor> updateVendor(@PathVariable Long id, @Valid @RequestBody Vendor update) {
+    public ResponseEntity<Vendor> updateVendor(@PathVariable String id, @Valid @RequestBody Vendor update) {
         return vendorRepository.findById(id)
             .map(existing -> {
                 existing.setCompanyName(update.getCompanyName());
@@ -52,7 +52,7 @@ public class VendorController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteVendor(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteVendor(@PathVariable String id) {
         if (!vendorRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }

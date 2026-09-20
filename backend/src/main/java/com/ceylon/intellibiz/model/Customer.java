@@ -1,37 +1,31 @@
 package com.ceylon.intellibiz.model;
 
-import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-@Table(name = "customers")
+@Document(collection = "customers")
 public class Customer {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
     @NotBlank
-    @Column(name = "full_name", nullable = false, length = 255)
     private String fullName;
 
-    @Column(name = "company_name", length = 255)
     private String companyName;
 
-    @Column(length = 255)
     private String email;
 
-    @Column(length = 50)
     private String phone;
 
-    @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 }

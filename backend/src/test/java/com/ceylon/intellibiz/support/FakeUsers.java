@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.bson.types.ObjectId;
 
 /** In-memory stand-in for the users table, so security tests need no database. */
 public final class FakeUsers {
@@ -23,7 +24,7 @@ public final class FakeUsers {
                 case "save" -> {
                     User user = (User) args[0];
                     if (user.getId() == null) {
-                        user.setId(users.stream().mapToLong(User::getId).max().orElse(0) + 1);
+                        user.setId(new ObjectId().toHexString());
                     }
                     users.removeIf(existing -> Objects.equals(existing.getId(), user.getId()));
                     users.add(user);
@@ -45,7 +46,7 @@ public final class FakeUsers {
 
     public User add(String username, String role) {
         User user = new User();
-        user.setId(users.stream().mapToLong(User::getId).max().orElse(0) + 1);
+        user.setId(new ObjectId().toHexString());
         user.setUsername(username);
         user.setEmail(username + "@company.lk");
         user.setPasswordHash("not-a-real-hash");

@@ -25,7 +25,7 @@ public class InventoryController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<InventoryItem> getInventoryItem(@PathVariable Long id) {
+    public ResponseEntity<InventoryItem> getInventoryItem(@PathVariable String id) {
         return inventoryItemRepository.findById(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
@@ -39,7 +39,7 @@ public class InventoryController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<InventoryItem> updateInventoryItem(@PathVariable Long id, @Valid @RequestBody InventoryItem update) {
+    public ResponseEntity<InventoryItem> updateInventoryItem(@PathVariable String id, @Valid @RequestBody InventoryItem update) {
         return inventoryItemRepository.findById(id)
             .map(existing -> {
                 existing.setSku(update.getSku());
@@ -55,7 +55,7 @@ public class InventoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInventoryItem(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteInventoryItem(@PathVariable String id) {
         if (!inventoryItemRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }

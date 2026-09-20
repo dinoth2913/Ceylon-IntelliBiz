@@ -36,7 +36,7 @@ class JwtServiceTest {
     void issuesAndVerifiesTokensWithAGoodSecret() {
         JwtService service = new JwtService(GOOD_SECRET, 60_000);
 
-        String token = service.generateToken(7L, "asha", "SALES");
+        String token = service.generateToken("7", "asha", "SALES");
         Claims claims = service.parseClaims(token);
 
         assertEquals("asha", claims.getSubject());
@@ -46,7 +46,7 @@ class JwtServiceTest {
 
     @Test
     void aTokenSignedWithADifferentSecretIsRejected() {
-        String forged = new JwtService("another-completely-different-secret-value-1234", 60_000).generateToken(1L, "asha", "ADMIN");
+        String forged = new JwtService("another-completely-different-secret-value-1234", 60_000).generateToken("1", "asha", "ADMIN");
 
         assertFalse(new JwtService(GOOD_SECRET, 60_000).isValid(forged));
     }
@@ -54,6 +54,6 @@ class JwtServiceTest {
     @Test
     void expiredTokensAreRejected() {
         JwtService service = new JwtService(GOOD_SECRET, -1000);
-        assertFalse(service.isValid(service.generateToken(1L, "asha", "SALES")));
+        assertFalse(service.isValid(service.generateToken("1", "asha", "SALES")));
     }
 }

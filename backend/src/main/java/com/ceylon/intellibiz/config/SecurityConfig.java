@@ -4,6 +4,7 @@ import com.ceylon.intellibiz.security.JwtAuthenticationFilter;
 import com.ceylon.intellibiz.security.RestAuthenticationEntryPoint;
 import com.ceylon.intellibiz.security.Roles;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.config.Customizer;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -38,6 +39,8 @@ public class SecurityConfig {
 
         http
             .csrf(AbstractHttpConfigurer::disable)
+            // Uses the CorsConfigurationSource bean, so browser preflights are answered before the rules below.
+            .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(handling -> handling.authenticationEntryPoint(authenticationEntryPoint))
             // Rules are checked top to bottom and the first match wins.

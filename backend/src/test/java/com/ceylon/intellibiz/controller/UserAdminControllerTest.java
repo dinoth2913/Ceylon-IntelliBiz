@@ -59,7 +59,7 @@ class UserAdminControllerTest {
         return FAKE.bearerFor(jwtService, admin);
     }
 
-    private void setRole(long userId, String role, String header, int expectedStatus) throws Exception {
+    private void setRole(String userId, String role, String header, int expectedStatus) throws Exception {
         mockMvc.perform(put("/api/users/" + userId + "/role")
                 .header("Authorization", header)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -133,7 +133,7 @@ class UserAdminControllerTest {
         setRole(asha.getId(), "OWNER", adminHeader(), 400);
         setRole(asha.getId(), "ROLE_ADMIN", adminHeader(), 400);
         setRole(asha.getId(), "", adminHeader(), 400);
-        setRole(999, "SALES", adminHeader(), 404);
+        setRole("no-such-user", "SALES", adminHeader(), 404);
 
         assertEquals("STAFF", asha.getRole());
     }
