@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.2</version>
+    <version>3.5.6</version>
     <relativePath/>
   </parent>
   <groupId>com.ceylon</groupId>
@@ -16,6 +16,8 @@
   <description>Enterprise backend service for Ceylon IntelliBiz</description>
   <properties>
     <java.version>25</java.version>
+    <!-- JDK 23+ no longer runs annotation processors from the classpath unless asked to -->
+    <maven.compiler.proc>full</maven.compiler.proc>
   </properties>
   <dependencies>
     <dependency>
