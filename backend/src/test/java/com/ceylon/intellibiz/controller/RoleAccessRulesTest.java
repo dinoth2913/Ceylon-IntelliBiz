@@ -119,6 +119,7 @@ class RoleAccessRulesTest {
         publicRule(HttpMethod.POST, "/api/chat");
         publicRule(HttpMethod.GET, "/api/chat/session-1");
         publicRule(HttpMethod.POST, "/api/contact-requests");
+        publicRule(HttpMethod.POST, "/api/marketplace-orders");
 
         // Any signed-in user
         rule(HttpMethod.GET, "/api/auth/me", ALL, false);
@@ -131,6 +132,9 @@ class RoleAccessRulesTest {
 
         // Demo requests can be read by sales and admins
         rule(HttpMethod.GET, "/api/contact-requests", SALES_SIDE, false);
+
+        // Marketplace purchase requests can only be read by sales and admins
+        rule(HttpMethod.GET, "/api/marketplace-orders", SALES_SIDE, false);
 
         // Business data: everyone with a business role reads, the owning role writes
         areaRule("/api/customers", SALES_SIDE);

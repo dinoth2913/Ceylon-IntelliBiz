@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/chat/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/chat").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/contact-requests").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/marketplace-orders").permitAll()
 
                 // --- Any signed-in user, whatever their role ---
                 .requestMatchers("/api/auth/me").authenticated()
@@ -60,9 +61,10 @@ public class SecurityConfig {
                 // --- Admin only ---
                 .requestMatchers("/api/users/**").hasRole(Roles.ADMIN)
 
-                // --- Sales and admin: demo requests, marketplace catalogue ---
+                // --- Sales and admin: demo requests, marketplace catalogue and purchase requests ---
                 .requestMatchers("/api/contact-requests/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
                 .requestMatchers("/api/products/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
+                .requestMatchers("/api/marketplace-orders/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
 
                 // --- Business data: everyone with a business role can read ---
                 .requestMatchers("/api/ai/**").hasAnyRole(business)

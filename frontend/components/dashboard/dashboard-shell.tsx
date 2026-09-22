@@ -20,6 +20,7 @@ import {
   Sparkles,
   Store,
   Sun,
+  Tag,
   Users,
   Wallet,
   X,
@@ -56,6 +57,7 @@ const navItems = [
   { label: 'Orders', href: '/dashboard/orders', icon: ShoppingBag },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package },
   { label: 'Vendors', href: '/dashboard/vendors', icon: Store },
+  { label: 'Marketplace', href: '/dashboard/marketplace', icon: Tag },
   { label: 'Finance', href: '/dashboard/finance', icon: Wallet },
   { label: 'AI Assistant', href: '/dashboard/ai', icon: Bot },
   { label: 'Team', href: '/dashboard/team', icon: ShieldCheck }

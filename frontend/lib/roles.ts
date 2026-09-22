@@ -28,14 +28,15 @@ export function hasBusinessAccess(role: string | null | undefined): boolean {
   return BUSINESS_ROLES.includes(normaliseRole(role));
 }
 
-type WritableArea = 'customers' | 'orders' | 'inventory' | 'vendors' | 'invoices';
+type WritableArea = 'customers' | 'orders' | 'inventory' | 'vendors' | 'invoices' | 'products';
 
 const WRITERS: Record<WritableArea, readonly string[]> = {
   customers: ['ADMIN', 'SALES'],
   orders: ['ADMIN', 'SALES'],
   inventory: ['ADMIN', 'SALES'],
   vendors: ['ADMIN', 'SALES'],
-  invoices: ['ADMIN', 'FINANCE']
+  invoices: ['ADMIN', 'FINANCE'],
+  products: ['ADMIN', 'SALES']
 };
 
 export function canWrite(area: WritableArea, role: string | null | undefined): boolean {
