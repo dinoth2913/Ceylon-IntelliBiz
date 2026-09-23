@@ -8,6 +8,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 @Data
@@ -16,8 +18,14 @@ import java.util.Set;
 @Document(collection = "customers")
 public class Customer {
 
-    /** The only values {@link #segment} may hold — checked by CustomerController, since Mongo has no enum type. */
-    public static final Set<String> SEGMENTS = Set.of("Enterprise", "SME", "Retail");
+    /**
+     * The only values {@link #segment} may hold — checked by CustomerController, since Mongo has no enum
+     * type. A {@code LinkedHashSet}, not {@code Set.of(...)}: the latter's iteration order is randomised
+     * per JVM run, which would make the "segment must be one of: ..." error message read differently
+     * every time the backend restarts.
+     */
+    public static final Set<String> SEGMENTS =
+        new LinkedHashSet<>(List.of("Enterprise", "SME", "Retail"));
 
     @Id
     private String id;

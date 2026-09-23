@@ -18,6 +18,7 @@ type BackendCustomer = {
   companyName: string | null;
   email: string | null;
   phone: string | null;
+  segment: string;
   createdAt: string | null;
 };
 
@@ -40,10 +41,9 @@ function mapCustomer(record: BackendCustomer): CustomerRecord {
     company: record.companyName ?? '—',
     email: record.email ?? '—',
     phone: record.phone ?? '—',
-    // The customers table only tracks contact details today — segment, status,
-    // and lifetime value aren't in the schema yet, so live records get sensible
+    segment: (record.segment as CustomerRecord['segment']) ?? 'SME',
+    // Status and lifetime value aren't in the schema yet, so live records get sensible
     // defaults until the CRM data model grows to cover them.
-    segment: 'SME',
     status: 'Active',
     lifetimeValue: 0,
     lastContact: relativeTime(record.createdAt)
@@ -59,7 +59,7 @@ export default function CustomersPage() {
   const [query, setQuery] = useState('');
   const [segment, setSegment] = useState<(typeof segments)[number]>('All');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', company: '', email: '', phone: '' });
+  const [form, setForm] = useState({ name: '', company: '', email: '', phone: '', segment: 'SME' });
 
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
 
@@ -101,7 +101,7 @@ export default function CustomersPage() {
     try {
       const response = await apiFetch('/api/customers', {
         method: 'POST',
-        body: JSON.stringify({ fullName: form.name, companyName: form.company, email: form.email, phone: form.phone || null })
+        body: JSON.stringify({ fullName: form.name, companyName: form.company, email: form.email, phone: form.phone || null, segment: form.segment })
       });
       if (!response.ok) throw new Error('Request failed');
       const saved: BackendCustomer = await response.json();
@@ -116,7 +116,7 @@ export default function CustomersPage() {
           company: form.company,
           email: form.email,
           phone: form.phone || '—',
-          segment: 'SME',
+          segment: form.segment as CustomerRecord['segment'],
           status: 'Prospect',
           lifetimeValue: 0,
           lastContact: 'Just now'
@@ -125,7 +125,7 @@ export default function CustomersPage() {
       ]);
     }
 
-    setForm({ name: '', company: '', email: '', phone: '' });
+    setForm({ name: '', company: '', email: '', phone: '', segment: 'SME' });
     setShowForm(false);
   };
 
@@ -180,6 +180,14 @@ export default function CustomersPage() {
           <label className={`flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
             Phone
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+94 7X XXX XXXX" className={`rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`} />
+          </label>
+          <label className={`flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+            Segment
+            <select value={form.segment} onChange={(e) => setForm({ ...form, segment: e.target.value })} className={`rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+              {segments.filter((item) => item !== 'All').map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
           </label>
           <div className="sm:col-span-2 lg:col-span-4">
             <button type="submit" className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>

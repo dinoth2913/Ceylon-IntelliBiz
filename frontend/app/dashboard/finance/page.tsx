@@ -18,6 +18,7 @@ type BackendInvoice = {
   customerId: string | null;
   totalAmount: number;
   status: string;
+  dueDate: string | null;
   createdAt: string | null;
 };
 
@@ -37,9 +38,7 @@ function mapInvoice(record: BackendInvoice, customerNames: Map<string, string>):
     amount: record.totalAmount,
     status: (record.status as InvoiceRecord['status']) ?? 'Draft',
     issued: formatDate(record.createdAt),
-    // The invoices table doesn't track a due date yet, so live records show
-    // "—" until the Finance Service schema grows to cover it.
-    due: '—'
+    due: formatDate(record.dueDate)
   };
 }
 
@@ -47,7 +46,7 @@ function suggestInvoiceNumber() {
   return `INV-${Date.now().toString().slice(-6)}`;
 }
 
-const emptyForm = { invoiceNumber: suggestInvoiceNumber(), customerId: '', totalAmount: '', status: 'Draft' as string };
+const emptyForm = { invoiceNumber: suggestInvoiceNumber(), customerId: '', totalAmount: '', status: 'Draft' as string, dueDate: '' };
 
 export default function FinancePage() {
   const { darkMode } = useDashboardTheme();
@@ -112,7 +111,8 @@ export default function FinancePage() {
           invoiceNumber: form.invoiceNumber.trim(),
           customerId: form.customerId || null,
           totalAmount,
-          status: form.status
+          status: form.status,
+          dueDate: form.dueDate ? `${form.dueDate}T00:00:00Z` : null
         })
       });
       if (!response.ok) {
@@ -124,7 +124,7 @@ export default function FinancePage() {
       const customerNames = new Map(customers.map((customer) => [customer.id, customer.fullName]));
       setInvoices((current) => [mapInvoice(saved, customerNames), ...(dataSource === 'live' ? current : [])]);
       setDataSource('live');
-      setForm({ ...emptyForm, invoiceNumber: suggestInvoiceNumber() });
+      setForm({ ...emptyForm, invoiceNumber: suggestInvoiceNumber(), dueDate: '' });
       setShowForm(false);
     } catch {
       setFormError('The server could not be reached. Nothing was saved.');
@@ -195,6 +195,10 @@ export default function FinancePage() {
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
+          </label>
+          <label className={labelClass}>
+            Due date (optional)
+            <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className={inputClass} />
           </label>
           {formError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
           <div className="sm:col-span-2 lg:col-span-4">

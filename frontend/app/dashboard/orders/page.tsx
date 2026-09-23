@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Radio, Search, ShoppingBag, X } from 'lucide-react';
+import { Plus, Radio, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch } from '@/lib/auth';
@@ -11,17 +11,26 @@ import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboa
 
 const statuses = ['All', 'Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
 const orderStatuses = ['Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
+const channels = ['Direct sales', 'Marketplace', 'Field agent'] as const;
+
+type BackendLineItem = { description: string; quantity: number; unitPrice: number };
 
 type BackendOrder = {
   id: string;
   orderNumber: string;
   customerId: string | null;
+  channel: string;
+  items: BackendLineItem[];
   totalAmount: number;
   status: string;
   createdAt: string | null;
 };
 
 type BackendCustomer = { id: string; fullName: string };
+
+type LineItemDraft = { description: string; quantity: string; unitPrice: string };
+
+const emptyLineItem: LineItemDraft = { description: '', quantity: '1', unitPrice: '' };
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -34,12 +43,10 @@ function mapOrder(record: BackendOrder, customerNames: Map<string, string>): Ord
   return {
     id: record.orderNumber,
     customer: customerNames.get(record.customerId ?? '') ?? 'Unknown customer',
-    // The orders table doesn't track item count or sales channel yet, so live
-    // records get sensible defaults until the schema grows to cover them.
-    items: 1,
+    items: record.items?.length ? record.items.length : 1,
     total: record.totalAmount,
     status: (record.status as OrderRecord['status']) ?? 'Processing',
-    channel: 'Direct sales',
+    channel: (record.channel as OrderRecord['channel']) ?? 'Direct sales',
     date: formatDate(record.createdAt)
   };
 }
@@ -48,7 +55,13 @@ function suggestOrderNumber() {
   return `ORD-${Date.now().toString().slice(-6)}`;
 }
 
-const emptyForm = { orderNumber: suggestOrderNumber(), customerId: '', totalAmount: '', status: 'Processing' as string };
+const emptyForm = {
+  orderNumber: suggestOrderNumber(),
+  customerId: '',
+  totalAmount: '',
+  status: 'Processing' as string,
+  channel: 'Direct sales' as string
+};
 
 export default function OrdersPage() {
   const { darkMode } = useDashboardTheme();
@@ -65,6 +78,7 @@ export default function OrdersPage() {
   const [customers, setCustomers] = useState<BackendCustomer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [lineItems, setLineItems] = useState<LineItemDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -108,14 +122,59 @@ export default function OrdersPage() {
     value: orders.reduce((sum, o) => sum + o.total, 0)
   };
 
+  const computedLineItemsTotal = useMemo(() => {
+    return lineItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+      if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice)) return sum;
+      return sum + quantity * unitPrice;
+    }, 0);
+  }, [lineItems]);
+
+  const addLineItem = () => setLineItems((current) => [...current, { ...emptyLineItem }]);
+  const removeLineItem = (index: number) => setLineItems((current) => current.filter((_, i) => i !== index));
+  const updateLineItem = (index: number, patch: Partial<LineItemDraft>) =>
+    setLineItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+
+  const resetForm = () => {
+    setForm({ ...emptyForm, orderNumber: suggestOrderNumber() });
+    setLineItems([]);
+  };
+
   const handleAddOrder = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    const totalAmount = Number(form.totalAmount);
-    if (!form.orderNumber.trim() || !Number.isFinite(totalAmount) || totalAmount < 0) {
-      setFormError('Enter an order number and a valid total amount.');
+    if (!form.orderNumber.trim()) {
+      setFormError('Enter an order number.');
       return;
     }
+
+    let items: BackendLineItem[] = [];
+    let totalAmount: number;
+
+    if (lineItems.length > 0) {
+      for (const item of lineItems) {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        if (!item.description.trim() || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+          setFormError('Every line item needs a description, a quantity of at least 1, and a valid unit price.');
+          return;
+        }
+      }
+      items = lineItems.map((item) => ({
+        description: item.description.trim(),
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice)
+      }));
+      totalAmount = computedLineItemsTotal;
+    } else {
+      totalAmount = Number(form.totalAmount);
+      if (!Number.isFinite(totalAmount) || totalAmount < 0) {
+        setFormError('Enter a valid total amount, or add at least one line item.');
+        return;
+      }
+    }
+
     setSaving(true);
     setFormError(null);
     try {
@@ -124,6 +183,8 @@ export default function OrdersPage() {
         body: JSON.stringify({
           orderNumber: form.orderNumber.trim(),
           customerId: form.customerId || null,
+          channel: form.channel,
+          items,
           totalAmount,
           status: form.status
         })
@@ -137,7 +198,7 @@ export default function OrdersPage() {
       const customerNames = new Map(customers.map((customer) => [customer.id, customer.fullName]));
       setOrders((current) => [mapOrder(saved, customerNames), ...(dataSource === 'live' ? current : [])]);
       setDataSource('live');
-      setForm({ ...emptyForm, orderNumber: suggestOrderNumber() });
+      resetForm();
       setShowForm(false);
     } catch {
       setFormError('The server could not be reached. Nothing was saved.');
@@ -182,35 +243,118 @@ export default function OrdersPage() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           onSubmit={handleAddOrder}
-          className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
+          className={`flex flex-col gap-4 rounded-[24px] border p-5 ${cardClass}`}
         >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className={labelClass}>
+              Order number
+              <input required value={form.orderNumber} onChange={(e) => setForm({ ...form, orderNumber: e.target.value })} placeholder="ORD-100234" className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Customer
+              <select value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className={inputClass}>
+                <option value="">No customer</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>{customer.fullName}</option>
+                ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Channel
+              <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })} className={inputClass}>
+                {channels.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Status
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
+                {orderStatuses.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className={`rounded-2xl border p-4 ${darkMode ? 'border-white/10' : 'border-slate-100'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className={`text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Line items (optional)</p>
+              <button
+                type="button"
+                onClick={addLineItem}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${darkMode ? 'border border-white/10 text-slate-200 hover:bg-white/5' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add line item
+              </button>
+            </div>
+
+            {lineItems.length === 0 ? (
+              <p className={`mt-2 text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                No line items — the total amount below is used as-is. Add a line item to build the order from a description, quantity and unit price instead (the total is then computed automatically).
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-2">
+                {lineItems.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_80px_120px_32px] items-center gap-2">
+                    <input
+                      value={item.description}
+                      onChange={(e) => updateLineItem(index, { description: e.target.value })}
+                      placeholder="Description"
+                      className={inputClass}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
+                      placeholder="Qty"
+                      className={inputClass}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unitPrice}
+                      onChange={(e) => updateLineItem(index, { unitPrice: e.target.value })}
+                      placeholder="Unit price"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLineItem(index)}
+                      aria-label="Remove line item"
+                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${darkMode ? 'text-slate-400 hover:bg-rose-400/10 hover:text-rose-300' : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                <p className={`mt-1 text-sm font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                  Computed total: {formatLkr(computedLineItemsTotal)}
+                </p>
+              </div>
+            )}
+          </div>
+
           <label className={labelClass}>
-            Order number
-            <input required value={form.orderNumber} onChange={(e) => setForm({ ...form, orderNumber: e.target.value })} placeholder="ORD-100234" className={inputClass} />
+            Total amount (LKR){lineItems.length > 0 ? ' — computed from line items' : ''}
+            <input
+              required={lineItems.length === 0}
+              disabled={lineItems.length > 0}
+              type="number"
+              min="0"
+              step="0.01"
+              value={lineItems.length > 0 ? computedLineItemsTotal.toFixed(2) : form.totalAmount}
+              onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
+              placeholder="45000"
+              className={`${inputClass} sm:max-w-xs disabled:opacity-60`}
+            />
           </label>
-          <label className={labelClass}>
-            Customer
-            <select value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className={inputClass}>
-              <option value="">No customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>{customer.fullName}</option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Total amount (LKR)
-            <input required type="number" min="0" step="0.01" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} placeholder="45000" className={inputClass} />
-          </label>
-          <label className={labelClass}>
-            Status
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
-              {orderStatuses.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          {formError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
-          <div className="sm:col-span-2 lg:col-span-4">
+
+          {formError && <p className="text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
+
+          <div>
             <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
               <ShoppingBag className="h-4 w-4" /> {saving ? 'Saving…' : 'Save order'}
             </button>
