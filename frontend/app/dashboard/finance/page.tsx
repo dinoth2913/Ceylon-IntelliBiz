@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CircleDollarSign, FileWarning, Radio, ReceiptText, Wallet } from 'lucide-react';
-import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
+import { motion } from 'framer-motion';
+import { CircleDollarSign, FileWarning, Plus, Radio, ReceiptText, Wallet, X } from 'lucide-react';
+import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch } from '@/lib/auth';
+import { canWrite } from '@/lib/roles';
 import { invoices as seedInvoices, formatLkr, type InvoiceRecord } from '@/lib/dashboard-data';
+
+const invoiceStatuses = ['Draft', 'Outstanding', 'Paid', 'Overdue'] as const;
 
 type BackendInvoice = {
   id: string;
@@ -39,11 +43,27 @@ function mapInvoice(record: BackendInvoice, customerNames: Map<string, string>):
   };
 }
 
+function suggestInvoiceNumber() {
+  return `INV-${Date.now().toString().slice(-6)}`;
+}
+
+const emptyForm = { invoiceNumber: suggestInvoiceNumber(), customerId: '', totalAmount: '', status: 'Draft' as string };
+
 export default function FinancePage() {
   const { darkMode } = useDashboardTheme();
+  const { user } = useDashboardUser();
+  const canAdd = canWrite('invoices', user?.role);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(seedInvoices);
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+  const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
+  const labelClass = `flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`;
+
+  const [customers, setCustomers] = useState<BackendCustomer[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +76,7 @@ export default function FinancePage() {
         if (!invoicesResponse.ok) return;
         const invoicesData: BackendInvoice[] = await invoicesResponse.json();
         const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
+        if (!cancelled) setCustomers(customersData);
         const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
         if (!cancelled && Array.isArray(invoicesData)) {
           setInvoices(invoicesData.map((invoice) => mapInvoice(invoice, customerNames)));
@@ -74,25 +95,115 @@ export default function FinancePage() {
   const outstanding = invoices.filter((i) => i.status === 'Outstanding').reduce((sum, i) => sum + i.amount, 0);
   const overdue = invoices.filter((i) => i.status === 'Overdue').reduce((sum, i) => sum + i.amount, 0);
 
+  const handleAddInvoice = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    const totalAmount = Number(form.totalAmount);
+    if (!form.invoiceNumber.trim() || !Number.isFinite(totalAmount) || totalAmount < 0) {
+      setFormError('Enter an invoice number and a valid total amount.');
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const response = await apiFetch('/api/invoices', {
+        method: 'POST',
+        body: JSON.stringify({
+          invoiceNumber: form.invoiceNumber.trim(),
+          customerId: form.customerId || null,
+          totalAmount,
+          status: form.status
+        })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setFormError(body?.message ?? 'Could not save this invoice.');
+        return;
+      }
+      const saved: BackendInvoice = await response.json();
+      const customerNames = new Map(customers.map((customer) => [customer.id, customer.fullName]));
+      setInvoices((current) => [mapInvoice(saved, customerNames), ...(dataSource === 'live' ? current : [])]);
+      setDataSource('live');
+      setForm({ ...emptyForm, invoiceNumber: suggestInvoiceNumber() });
+      setShowForm(false);
+    } catch {
+      setFormError('The server could not be reached. Nothing was saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Finance</p>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-              dataSource === 'live'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
-                : darkMode
-                  ? 'border-white/10 text-slate-400'
-                  : 'border-slate-200 text-slate-500'
-            }`}
-          >
-            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Finance</p>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                dataSource === 'live'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                  : darkMode
+                    ? 'border-white/10 text-slate-400'
+                    : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+            </span>
+          </div>
+          <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Invoices &amp; billing</h1>
         </div>
-        <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Invoices &amp; billing</h1>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm((value) => !value)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+          >
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? 'Close' : 'Add invoice'}
+          </button>
+        )}
       </div>
+
+      {canAdd && showForm && (
+        <motion.form
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          onSubmit={handleAddInvoice}
+          className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
+        >
+          <label className={labelClass}>
+            Invoice number
+            <input required value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} placeholder="INV-100234" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Customer
+            <select value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className={inputClass}>
+              <option value="">No customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>{customer.fullName}</option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Total amount (LKR)
+            <input required type="number" min="0" step="0.01" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} placeholder="85000" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Status
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
+              {invoiceStatuses.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          {formError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
+          <div className="sm:col-span-2 lg:col-span-4">
+            <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+              <ReceiptText className="h-4 w-4" /> {saving ? 'Saving…' : 'Save invoice'}
+            </button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Collected" value={formatLkr(paid)} icon={CircleDollarSign} accent="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300" index={0} />

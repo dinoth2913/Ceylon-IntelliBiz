@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Radio, Search } from 'lucide-react';
-import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
+import { motion } from 'framer-motion';
+import { Plus, Radio, Search, ShoppingBag, X } from 'lucide-react';
+import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { apiFetch } from '@/lib/auth';
+import { canWrite } from '@/lib/roles';
 import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboard-data';
 
 const statuses = ['All', 'Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
+const orderStatuses = ['Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
 
 type BackendOrder = {
   id: string;
@@ -41,13 +44,29 @@ function mapOrder(record: BackendOrder, customerNames: Map<string, string>): Ord
   };
 }
 
+function suggestOrderNumber() {
+  return `ORD-${Date.now().toString().slice(-6)}`;
+}
+
+const emptyForm = { orderNumber: suggestOrderNumber(), customerId: '', totalAmount: '', status: 'Processing' as string };
+
 export default function OrdersPage() {
   const { darkMode } = useDashboardTheme();
+  const { user } = useDashboardUser();
+  const canAdd = canWrite('orders', user?.role);
   const [orders, setOrders] = useState<OrderRecord[]>(seedOrders);
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [status, setStatus] = useState<(typeof statuses)[number]>('All');
   const [query, setQuery] = useState('');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+  const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
+  const labelClass = `flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`;
+
+  const [customers, setCustomers] = useState<BackendCustomer[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +79,7 @@ export default function OrdersPage() {
         if (!ordersResponse.ok) return;
         const ordersData: BackendOrder[] = await ordersResponse.json();
         const customersData: BackendCustomer[] = customersResponse.ok ? await customersResponse.json() : [];
+        if (!cancelled) setCustomers(customersData);
         const customerNames = new Map(customersData.map((customer) => [customer.id, customer.fullName]));
         if (!cancelled && Array.isArray(ordersData)) {
           setOrders(ordersData.map((order) => mapOrder(order, customerNames)));
@@ -88,25 +108,115 @@ export default function OrdersPage() {
     value: orders.reduce((sum, o) => sum + o.total, 0)
   };
 
+  const handleAddOrder = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    const totalAmount = Number(form.totalAmount);
+    if (!form.orderNumber.trim() || !Number.isFinite(totalAmount) || totalAmount < 0) {
+      setFormError('Enter an order number and a valid total amount.');
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const response = await apiFetch('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderNumber: form.orderNumber.trim(),
+          customerId: form.customerId || null,
+          totalAmount,
+          status: form.status
+        })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setFormError(body?.message ?? 'Could not save this order.');
+        return;
+      }
+      const saved: BackendOrder = await response.json();
+      const customerNames = new Map(customers.map((customer) => [customer.id, customer.fullName]));
+      setOrders((current) => [mapOrder(saved, customerNames), ...(dataSource === 'live' ? current : [])]);
+      setDataSource('live');
+      setForm({ ...emptyForm, orderNumber: suggestOrderNumber() });
+      setShowForm(false);
+    } catch {
+      setFormError('The server could not be reached. Nothing was saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Sales</p>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-              dataSource === 'live'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
-                : darkMode
-                  ? 'border-white/10 text-slate-400'
-                  : 'border-slate-200 text-slate-500'
-            }`}
-          >
-            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Sales</p>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                dataSource === 'live'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                  : darkMode
+                    ? 'border-white/10 text-slate-400'
+                    : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+            </span>
+          </div>
+          <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Orders</h1>
         </div>
-        <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Orders</h1>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm((value) => !value)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+          >
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? 'Close' : 'Add order'}
+          </button>
+        )}
       </div>
+
+      {canAdd && showForm && (
+        <motion.form
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          onSubmit={handleAddOrder}
+          className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
+        >
+          <label className={labelClass}>
+            Order number
+            <input required value={form.orderNumber} onChange={(e) => setForm({ ...form, orderNumber: e.target.value })} placeholder="ORD-100234" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Customer
+            <select value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className={inputClass}>
+              <option value="">No customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>{customer.fullName}</option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Total amount (LKR)
+            <input required type="number" min="0" step="0.01" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} placeholder="45000" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Status
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
+              {orderStatuses.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          {formError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
+          <div className="sm:col-span-2 lg:col-span-4">
+            <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+              <ShoppingBag className="h-4 w-4" /> {saving ? 'Saving…' : 'Save order'}
+            </button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className={`rounded-[20px] border p-4 ${cardClass}`}>

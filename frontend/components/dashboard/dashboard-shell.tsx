@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Bell,
   Bot,
   Inbox,
   LayoutDashboard,
@@ -13,7 +12,6 @@ import {
   Menu,
   MoonStar,
   Package,
-  Search,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -28,6 +26,8 @@ import {
 } from 'lucide-react';
 import { getSession, logout, refreshUser, type AuthUser } from '@/lib/auth';
 import { ROLE_DESCRIPTIONS, canViewRoute, hasBusinessAccess, normaliseRole, roleLabel, type Role } from '@/lib/roles';
+import { GlobalSearch } from './global-search';
+import { NotificationBell } from './notification-bell';
 
 type DashboardThemeContextValue = {
   darkMode: boolean;
@@ -257,14 +257,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <Menu className="h-4 w-4" />
               </button>
 
-              <div className={`flex flex-1 items-center gap-2 rounded-full border px-4 py-2 ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-300' : 'border-slate-200 bg-white text-slate-500'}`}>
-                <Search className="h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Search customers, orders, invoices…"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-                />
-              </div>
+              <GlobalSearch darkMode={darkMode} role={user?.role} />
 
               <button
                 onClick={toggleDarkMode}
@@ -274,13 +267,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 {darkMode ? <Sun className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
               </button>
 
-              <button
-                className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border ${darkMode ? 'border-white/10 bg-white/10 text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
-                aria-label="Notifications"
-              >
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-cyan-400" />
-              </button>
+              <NotificationBell darkMode={darkMode} hasBusinessAccess={hasBusinessAccess(user?.role)} />
 
               <div className={`hidden items-center gap-2 rounded-full border py-1 pl-1 pr-3 sm:flex ${darkMode ? 'border-white/10 bg-white/10' : 'border-slate-200 bg-white'}`}>
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-xs font-semibold text-white">{initials}</span>

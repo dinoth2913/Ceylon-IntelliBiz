@@ -9,6 +9,8 @@ import com.ceylon.intellibiz.config.SecurityConfig;
 import com.ceylon.intellibiz.model.User;
 import com.ceylon.intellibiz.repository.UserRepository;
 import com.ceylon.intellibiz.security.JwtAuthenticationFilter;
+import com.ceylon.intellibiz.security.RateLimitFilter;
+import com.ceylon.intellibiz.security.RateLimiter;
 import com.ceylon.intellibiz.security.JwtService;
 import com.ceylon.intellibiz.security.RestAuthenticationEntryPoint;
 import com.ceylon.intellibiz.support.FakeUsers;
@@ -35,6 +37,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
     SecurityConfig.class,
     JwtAuthenticationFilter.class,
+    RateLimitFilter.class,
+    RateLimiter.class,
     JwtService.class,
     RestAuthenticationEntryPoint.class,
     RoleAccessRulesTest.Probe.class,
@@ -149,6 +153,7 @@ class RoleAccessRulesTest {
         // Admin only
         rule(HttpMethod.GET, "/api/users", ADMIN_ONLY, false);
         rule(HttpMethod.PUT, "/api/users/1/role", ADMIN_ONLY, false);
+        rule(HttpMethod.POST, "/api/users/1/reset-password", ADMIN_ONLY, false);
         rule(HttpMethod.GET, "/api/db-test", ADMIN_ONLY, false);
 
         // Deny by default: an endpoint nobody has written a rule for is admin-only, never open

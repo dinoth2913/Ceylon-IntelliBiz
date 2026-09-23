@@ -47,23 +47,39 @@ public class CustomerController {
     }
 
     @PostMapping
-    public Customer createCustomer(@Valid @RequestBody Customer customer) {
+    public ResponseEntity<?> createCustomer(@Valid @RequestBody Customer customer) {
+        ApiError problem = checkSegment(customer);
+        if (problem != null) {
+            return ResponseEntity.badRequest().body(problem);
+        }
         customer.setId(null);
         customer.setCreatedAt(Instant.now());
-        return customerRepository.save(customer);
+        return ResponseEntity.ok(customerRepository.save(customer));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Customer> updateCustomer(@PathVariable String id, @Valid @RequestBody Customer update) {
+    public ResponseEntity<?> updateCustomer(@PathVariable String id, @Valid @RequestBody Customer update) {
+        ApiError problem = checkSegment(update);
+        if (problem != null) {
+            return ResponseEntity.badRequest().body(problem);
+        }
         return customerRepository.findById(id)
-            .map(existing -> {
+            .<ResponseEntity<?>>map(existing -> {
                 existing.setFullName(update.getFullName());
                 existing.setCompanyName(update.getCompanyName());
                 existing.setEmail(update.getEmail());
                 existing.setPhone(update.getPhone());
+                existing.setSegment(update.getSegment());
                 return ResponseEntity.ok(customerRepository.save(existing));
             })
             .orElse(ResponseEntity.notFound().build());
+    }
+
+    private static ApiError checkSegment(Customer customer) {
+        if (customer.getSegment() != null && !Customer.SEGMENTS.contains(customer.getSegment())) {
+            return new ApiError("segment must be one of: " + String.join(", ", Customer.SEGMENTS));
+        }
+        return null;
     }
 
     /** Mongo has no foreign keys, so refuse to leave orders or invoices pointing at a customer that no longer exists. */

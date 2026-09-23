@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, CircleAlert, Loader2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Copy, KeyRound, Loader2, RefreshCw, ShieldCheck, UserRoundCheck, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { apiFetch } from '@/lib/auth';
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, normaliseRole, type Role } from '@/lib/roles';
@@ -39,6 +39,17 @@ export default function TeamPage() {
   const [state, setState] = useState<LoadState>('loading');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<{ username: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const confirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimeout.current) clearTimeout(confirmTimeout.current);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -74,6 +85,47 @@ export default function TeamPage() {
       setNotice({ kind: 'error', text: 'The server could not be reached. Nothing was changed.' });
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleResetClick = (member: TeamMember) => {
+    if (confirmingId !== member.id) {
+      setConfirmingId(member.id);
+      if (confirmTimeout.current) clearTimeout(confirmTimeout.current);
+      confirmTimeout.current = setTimeout(() => setConfirmingId(null), 4000);
+      return;
+    }
+    if (confirmTimeout.current) clearTimeout(confirmTimeout.current);
+    setConfirmingId(null);
+    void resetPassword(member);
+  };
+
+  const resetPassword = async (member: TeamMember) => {
+    setResettingId(member.id);
+    setNotice(null);
+    try {
+      const response = await apiFetch(`/api/users/${member.id}/reset-password`, { method: 'POST' });
+      if (!response.ok) {
+        setNotice({ kind: 'error', text: await errorMessage(response, "Could not reset that person's password.") });
+        return;
+      }
+      const result: { username: string; temporaryPassword: string } = await response.json();
+      setResetResult({ username: result.username, password: result.temporaryPassword });
+      setCopied(false);
+    } catch {
+      setNotice({ kind: 'error', text: 'The server could not be reached. Nothing was changed.' });
+    } finally {
+      setResettingId(null);
+    }
+  };
+
+  const copyPassword = async () => {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.password);
+      setCopied(true);
+    } catch {
+      // Clipboard access can be blocked; the password is still selectable/visible in the banner.
     }
   };
 
@@ -121,6 +173,33 @@ export default function TeamPage() {
         >
           {notice.kind === 'ok' ? <CheckCircle2 className="h-4 w-4" /> : <CircleAlert className="h-4 w-4" />} {notice.text}
         </p>
+      )}
+
+      {resetResult && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">New password for {resetResult.username}</p>
+              <p className="mt-1 text-xs opacity-80">Shown once — copy it now and send it to them directly. It won&apos;t be shown again.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="rounded-lg bg-white/70 px-2.5 py-1.5 font-mono text-sm dark:bg-black/20">{resetResult.password}</code>
+                <button
+                  onClick={() => void copyPassword()}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-400/10"
+                >
+                  <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setResetResult(null)} aria-label="Dismiss" className="text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </motion.div>
       )}
 
       {state === 'loading' && members.length === 0 && (
@@ -186,6 +265,22 @@ export default function TeamPage() {
                               ))}
                             </select>
                             {savingId === member.id && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                            <button
+                              onClick={() => handleResetClick(member)}
+                              disabled={resettingId === member.id}
+                              title={confirmingId === member.id ? 'Click again to confirm' : `Reset ${member.username}'s password`}
+                              aria-label={confirmingId === member.id ? `Click again to confirm resetting ${member.username}'s password` : `Reset ${member.username}'s password`}
+                              className={`flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition disabled:opacity-50 ${
+                                confirmingId === member.id
+                                  ? 'bg-rose-500 text-white hover:bg-rose-600'
+                                  : darkMode
+                                    ? 'text-slate-400 hover:bg-white/10 hover:text-white'
+                                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                              }`}
+                            >
+                              {resettingId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                              {confirmingId === member.id && 'Confirm?'}
+                            </button>
                           </div>
                         </td>
                       </tr>

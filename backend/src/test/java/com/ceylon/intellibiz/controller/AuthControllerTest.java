@@ -11,6 +11,8 @@ import com.ceylon.intellibiz.config.SecurityConfig;
 import com.ceylon.intellibiz.model.User;
 import com.ceylon.intellibiz.repository.UserRepository;
 import com.ceylon.intellibiz.security.JwtAuthenticationFilter;
+import com.ceylon.intellibiz.security.RateLimitFilter;
+import com.ceylon.intellibiz.security.RateLimiter;
 import com.ceylon.intellibiz.security.JwtService;
 import com.ceylon.intellibiz.security.RestAuthenticationEntryPoint;
 import com.ceylon.intellibiz.support.FakeUsers;
@@ -31,6 +33,8 @@ import org.springframework.test.web.servlet.MvcResult;
 @Import({
     SecurityConfig.class,
     JwtAuthenticationFilter.class,
+    RateLimitFilter.class,
+    RateLimiter.class,
     JwtService.class,
     RestAuthenticationEntryPoint.class,
     AuthControllerTest.Fakes.class

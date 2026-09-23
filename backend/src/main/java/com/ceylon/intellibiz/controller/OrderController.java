@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -46,6 +47,7 @@ public class OrderController {
         }
         order.setId(null);
         order.setCreatedAt(Instant.now());
+        applyLineItemTotal(order);
         return ResponseEntity.ok(orderRepository.save(order));
     }
 
@@ -59,8 +61,11 @@ public class OrderController {
                 }
                 existing.setOrderNumber(update.getOrderNumber());
                 existing.setCustomerId(update.getCustomerId());
+                existing.setChannel(update.getChannel());
+                existing.setItems(update.getItems());
                 existing.setTotalAmount(update.getTotalAmount());
                 existing.setStatus(update.getStatus());
+                applyLineItemTotal(existing);
                 return ResponseEntity.ok(orderRepository.save(existing));
             })
             .orElse(ResponseEntity.notFound().build());
@@ -84,5 +89,20 @@ public class OrderController {
             return new ApiError("customerId does not match any customer.");
         }
         return null;
+    }
+
+    /**
+     * When line items are given, they're the source of truth for the total — a client-supplied total that
+     * disagreed with its own line items would just be a bug (or a lie) sitting in the database. With no
+     * line items, whatever total the client sent stands, so simple/manual orders keep working.
+     */
+    private void applyLineItemTotal(Order order) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            return;
+        }
+        BigDecimal computed = order.getItems().stream()
+            .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        order.setTotalAmount(computed);
     }
 }

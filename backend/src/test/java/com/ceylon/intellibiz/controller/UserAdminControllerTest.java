@@ -1,7 +1,10 @@
 package com.ceylon.intellibiz.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -10,6 +13,8 @@ import com.ceylon.intellibiz.config.SecurityConfig;
 import com.ceylon.intellibiz.model.User;
 import com.ceylon.intellibiz.repository.UserRepository;
 import com.ceylon.intellibiz.security.JwtAuthenticationFilter;
+import com.ceylon.intellibiz.security.RateLimitFilter;
+import com.ceylon.intellibiz.security.RateLimiter;
 import com.ceylon.intellibiz.security.JwtService;
 import com.ceylon.intellibiz.security.RestAuthenticationEntryPoint;
 import com.ceylon.intellibiz.support.FakeUsers;
@@ -21,6 +26,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Team management behind the real security rules: only admins can list users or change roles. */
@@ -28,6 +34,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
     SecurityConfig.class,
     JwtAuthenticationFilter.class,
+    RateLimitFilter.class,
+    RateLimiter.class,
     JwtService.class,
     RestAuthenticationEntryPoint.class,
     UserAdminControllerTest.Fakes.class
@@ -46,6 +54,7 @@ class UserAdminControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired JwtService jwtService;
+    @Autowired PasswordEncoder passwordEncoder;
 
     private User admin;
 
@@ -162,5 +171,37 @@ class UserAdminControllerTest {
     void reassigningTheSameAdminRoleIsHarmless() throws Exception {
         setRole(admin.getId(), "ADMIN", adminHeader(), 200);
         assertEquals("ADMIN", admin.getRole());
+    }
+
+    @Test
+    void anAdminCanResetSomeonesPasswordAndItIsOnlyShownOnce() throws Exception {
+        User asha = FAKE.add("asha", "SALES");
+        String oldHash = asha.getPasswordHash();
+
+        String body = mockMvc.perform(post("/api/users/" + asha.getId() + "/reset-password").header("Authorization", adminHeader()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.userId").value(asha.getId()))
+            .andExpect(jsonPath("$.username").value("asha"))
+            .andExpect(jsonPath("$.temporaryPassword").isNotEmpty())
+            .andReturn().getResponse().getContentAsString();
+
+        assertNotEquals(oldHash, asha.getPasswordHash());
+        String temporaryPassword = body.split("\"temporaryPassword\":\"")[1].split("\"")[0];
+        assertTrue(passwordEncoder.matches(temporaryPassword, asha.getPasswordHash()));
+    }
+
+    @Test
+    void resettingAMissingUsersPasswordReturns404() throws Exception {
+        mockMvc.perform(post("/api/users/no-such-user/reset-password").header("Authorization", adminHeader()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void nonAdminsCannotResetPasswords() throws Exception {
+        User asha = FAKE.add("asha", "SALES");
+        mockMvc.perform(post("/api/users/" + admin.getId() + "/reset-password").header("Authorization", FAKE.bearerFor(jwtService, asha)))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/users/" + admin.getId() + "/reset-password"))
+            .andExpect(status().isUnauthorized());
     }
 }

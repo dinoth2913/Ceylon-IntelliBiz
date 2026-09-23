@@ -41,5 +41,8 @@ public class Invoice {
     @NotBlank
     private String status = "Draft";
 
+    // Optional — null means no due date has been set yet.
+    private Instant dueDate;
+
     private Instant createdAt = Instant.now();
 }

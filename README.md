@@ -46,6 +46,7 @@ There are no default passwords or signing keys in the code. The stack won't star
 | `MONGODB_APP_PASSWORD` | The backend's own database user, limited to reading and writing the app database. |
 | `JWT_SECRET` | Signs login tokens. The backend refuses to start if it is missing, under 32 characters, or a placeholder. Anyone who knows it can forge a login for any user. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Password for the first admin (optional, see below). |
+| `RECOVERY_ADMIN_USERNAME` / `RECOVERY_ADMIN_PASSWORD` | Force-resets that admin's password at startup (optional, see [Forgot a password?](#forgot-a-password)). |
 
 - `.env` is gitignored. Never commit it; only `.env.example` (no values) is tracked.
 - The databases and the AI service are only published on `127.0.0.1`, not to your network. Only the frontend (3000) and the API (8080) are exposed.
@@ -63,7 +64,7 @@ Anyone can sign up, but every new account starts as `STAFF`, which has **no acce
 | `FINANCE` | customers, orders, invoices, inventory, vendors, insights | invoices |
 | `STAFF` | nothing | nothing |
 
-The access rules live in one place, [SecurityConfig.java](backend/src/main/java/com/ceylon/intellibiz/config/SecurityConfig.java), and any `/api` path without an explicit rule is admin-only. A user's role is read from the database on every request, so a change takes effect immediately.
+The access rules live in one place, [SecurityConfig.java](backend/src/main/java/com/ceylon/intellibiz/config/SecurityConfig.java), and any `/api` path without an explicit rule is admin-only. A user's role is read from the database on every request, so a change takes effect immediately. Adding a new controller and forgetting to add a rule for it is a real risk — `SecurityCoverageTest` fails the build if a controller's path is never mentioned in `SecurityConfig.java` at all (it can't check the rule is *correct*, just that someone made a conscious choice — `RoleAccessRulesTest` is the one that checks correctness).
 
 Because sign-up can only create `STAFF`, the first admin is created at startup from configuration:
 
@@ -71,6 +72,25 @@ Because sign-up can only create `STAFF`, the first admin is created at startup f
 - It only acts when **no admin exists yet**, so leaving the variables in place is harmless. It never promotes an existing account, so if that username or email is already registered it logs a warning and does nothing.
 - To make more admins, use the Team page. The last remaining admin can't be demoted.
 - If you ran an earlier version where sign-up accepted a `role`, check for accounts that gave themselves privileges: `db.users.find({ role: { $ne: 'STAFF' } }, { username: 1, email: 1, role: 1 })` in `mongosh`.
+
+### Forgot a password?
+
+There's no email-based "forgot password" flow (the app doesn't send email), so recovery works two ways:
+
+- **Anyone but the last admin:** an admin can reset it for you from the Team page. It generates a random password, shows it once, and the admin passes it to you directly — it's never emailed, logged or stored.
+- **The only admin, locked out:** set `RECOVERY_ADMIN_USERNAME` and `RECOVERY_ADMIN_PASSWORD` in `.env`, restart the backend, sign in with the new password, then blank both variables and restart again (leaving them set resets the password back to that value on every restart). It only ever touches an account that's already an admin.
+
+## Rate limiting
+
+The public, unauthenticated POST endpoints — the demo-request form, the chat widget and marketplace
+checkout — are limited to `RATE_LIMIT_MAX_REQUESTS` (default 5) calls per IP address per
+`RATE_LIMIT_WINDOW_SECONDS` (default 60), enforced by [`RateLimitFilter`](backend/src/main/java/com/ceylon/intellibiz/security/RateLimitFilter.java). Going over it gets a `429` with a `Retry-After` header.
+
+It's in-memory and per backend instance on purpose — this app runs as a single container with no Redis,
+so a shared limiter isn't worth a new dependency at this scale. That means a restart clears it, and
+running more than one backend instance would give each instance its own count instead of a shared one.
+Authenticated write endpoints aren't rate-limited this way: a signed-in account is already identifiable
+and its access can be revoked (Team page), which a bare-IP limiter isn't a substitute for.
 
 ## Database (MongoDB)
 

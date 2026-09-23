@@ -14,6 +14,8 @@ import com.ceylon.intellibiz.repository.ContactRequestRepository;
 import com.ceylon.intellibiz.repository.UserRepository;
 import com.ceylon.intellibiz.support.FakeUsers;
 import com.ceylon.intellibiz.security.JwtAuthenticationFilter;
+import com.ceylon.intellibiz.security.RateLimitFilter;
+import com.ceylon.intellibiz.security.RateLimiter;
 import com.ceylon.intellibiz.security.JwtService;
 import com.ceylon.intellibiz.security.RestAuthenticationEntryPoint;
 import java.lang.reflect.Proxy;
@@ -35,6 +37,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
     SecurityConfig.class,
     JwtAuthenticationFilter.class,
+    RateLimitFilter.class,
+    RateLimiter.class,
     JwtService.class,
     RestAuthenticationEntryPoint.class,
     ContactRequestApiTest.Fakes.class

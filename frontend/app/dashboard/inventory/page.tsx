@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, PackageCheck, Radio } from 'lucide-react';
-import { useDashboardTheme } from '@/components/dashboard/dashboard-shell';
+import { AlertTriangle, PackageCheck, PackagePlus, Plus, Radio, X } from 'lucide-react';
+import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { apiFetch } from '@/lib/auth';
+import { canWrite } from '@/lib/roles';
 import { shortId } from '@/lib/utils';
 import { inventory as seedInventory, formatLkr, type InventoryRecord } from '@/lib/dashboard-data';
 
@@ -32,11 +33,22 @@ function mapInventoryItem(record: BackendInventoryItem): InventoryRecord {
   };
 }
 
+const emptyForm = { sku: '', name: '', category: '', warehouse: '', price: '', stockQuantity: '', reorderLevel: '10' };
+
 export default function InventoryPage() {
   const { darkMode } = useDashboardTheme();
+  const { user } = useDashboardUser();
+  const canAdd = canWrite('inventory', user?.role);
   const [inventory, setInventory] = useState<InventoryRecord[]>(seedInventory);
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
+  const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
+  const labelClass = `flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`;
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,25 +73,122 @@ export default function InventoryPage() {
   const lowStockCount = inventory.filter((item) => item.stock <= item.reorderLevel).length;
   const totalValue = inventory.reduce((sum, item) => sum + item.stock * item.unitCost, 0);
 
+  const handleAddItem = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    const price = Number(form.price);
+    const stockQuantity = form.stockQuantity === '' ? 0 : Number(form.stockQuantity);
+    const reorderLevel = form.reorderLevel === '' ? 10 : Number(form.reorderLevel);
+    if (!form.sku.trim() || !form.name.trim() || !Number.isFinite(price) || price < 0) {
+      setFormError('Enter an SKU, a name and a valid price.');
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const response = await apiFetch('/api/inventory', {
+        method: 'POST',
+        body: JSON.stringify({
+          sku: form.sku.trim(),
+          name: form.name.trim(),
+          category: form.category.trim() || null,
+          warehouse: form.warehouse.trim() || null,
+          price,
+          stockQuantity,
+          reorderLevel
+        })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setFormError(body?.message ?? 'Could not save this item.');
+        return;
+      }
+      const saved: BackendInventoryItem = await response.json();
+      setInventory((current) => [mapInventoryItem(saved), ...(dataSource === 'live' ? current : [])]);
+      setDataSource('live');
+      setForm(emptyForm);
+      setShowForm(false);
+    } catch {
+      setFormError('The server could not be reached. Nothing was saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Operations</p>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-              dataSource === 'live'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
-                : darkMode
-                  ? 'border-white/10 text-slate-400'
-                  : 'border-slate-200 text-slate-500'
-            }`}
-          >
-            <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Operations</p>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                dataSource === 'live'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300'
+                  : darkMode
+                    ? 'border-white/10 text-slate-400'
+                    : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              <Radio className="h-3 w-3" /> {dataSource === 'live' ? 'Live from API' : 'Sample data'}
+            </span>
+          </div>
+          <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Inventory</h1>
         </div>
-        <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Inventory</h1>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm((value) => !value)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+          >
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? 'Close' : 'Add item'}
+          </button>
+        )}
       </div>
+
+      {canAdd && showForm && (
+        <motion.form
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          onSubmit={handleAddItem}
+          className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
+        >
+          <label className={labelClass}>
+            SKU
+            <input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="SKU-1042" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Name
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ceylon Cinnamon 250g" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Category
+            <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Spices" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Warehouse
+            <input value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} placeholder="Colombo DC" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Unit cost (LKR)
+            <input required type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="1200" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Stock quantity
+            <input type="number" min="0" value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} placeholder="0" className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            Reorder level
+            <input type="number" min="0" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })} placeholder="10" className={inputClass} />
+          </label>
+          {formError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
+          <div className="sm:col-span-2 lg:col-span-4">
+            <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+              <PackagePlus className="h-4 w-4" /> {saving ? 'Saving…' : 'Save item'}
+            </button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className={`rounded-[20px] border p-4 ${cardClass}`}>

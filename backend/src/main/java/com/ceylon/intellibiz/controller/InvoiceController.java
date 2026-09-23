@@ -61,6 +61,7 @@ public class InvoiceController {
                 existing.setCustomerId(update.getCustomerId());
                 existing.setTotalAmount(update.getTotalAmount());
                 existing.setStatus(update.getStatus());
+                existing.setDueDate(update.getDueDate());
                 return ResponseEntity.ok(invoiceRepository.save(existing));
             })
             .orElse(ResponseEntity.notFound().build());
