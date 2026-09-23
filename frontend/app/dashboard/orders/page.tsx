@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Radio, Search, ShoppingBag, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Radio, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
+import { ConfirmDeleteButton } from '@/components/dashboard/confirm-delete-button';
 import { apiFetch } from '@/lib/auth';
 import { canWrite } from '@/lib/roles';
 import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboard-data';
@@ -30,6 +31,8 @@ type BackendCustomer = { id: string; fullName: string };
 
 type LineItemDraft = { description: string; quantity: string; unitPrice: string };
 
+type DisplayOrder = OrderRecord & { backendId: string | null; customerId: string | null; rawItems: BackendLineItem[] };
+
 const emptyLineItem: LineItemDraft = { description: '', quantity: '1', unitPrice: '' };
 
 function formatDate(iso: string | null) {
@@ -39,11 +42,14 @@ function formatDate(iso: string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function mapOrder(record: BackendOrder, customerNames: Map<string, string>): OrderRecord {
+function mapOrder(record: BackendOrder, customerNames: Map<string, string>): DisplayOrder {
   return {
     id: record.orderNumber,
+    backendId: record.id,
+    customerId: record.customerId,
     customer: customerNames.get(record.customerId ?? '') ?? 'Unknown customer',
     items: record.items?.length ? record.items.length : 1,
+    rawItems: record.items ?? [],
     total: record.totalAmount,
     status: (record.status as OrderRecord['status']) ?? 'Processing',
     channel: (record.channel as OrderRecord['channel']) ?? 'Direct sales',
@@ -67,7 +73,7 @@ export default function OrdersPage() {
   const { darkMode } = useDashboardTheme();
   const { user } = useDashboardUser();
   const canAdd = canWrite('orders', user?.role);
-  const [orders, setOrders] = useState<OrderRecord[]>(seedOrders);
+  const [orders, setOrders] = useState<DisplayOrder[]>(seedOrders.map((o) => ({ ...o, backendId: null, customerId: null, rawItems: [] })));
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [status, setStatus] = useState<(typeof statuses)[number]>('All');
   const [query, setQuery] = useState('');
@@ -77,10 +83,13 @@ export default function OrdersPage() {
 
   const [customers, setCustomers] = useState<BackendCustomer[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,12 +145,36 @@ export default function OrdersPage() {
   const updateLineItem = (index: number, patch: Partial<LineItemDraft>) =>
     setLineItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
 
-  const resetForm = () => {
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
     setForm({ ...emptyForm, orderNumber: suggestOrderNumber() });
     setLineItems([]);
+    setFormError(null);
   };
 
-  const handleAddOrder = async (event: React.FormEvent) => {
+  const startEdit = (order: DisplayOrder) => {
+    if (!order.backendId) return;
+    setEditingId(order.backendId);
+    setForm({
+      orderNumber: order.id,
+      customerId: order.customerId ?? '',
+      totalAmount: String(order.total),
+      status: order.status,
+      channel: order.channel
+    });
+    setLineItems(
+      order.rawItems.map((item) => ({
+        description: item.description,
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice)
+      }))
+    );
+    setFormError(null);
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
     if (!form.orderNumber.trim()) {
@@ -178,8 +211,8 @@ export default function OrdersPage() {
     setSaving(true);
     setFormError(null);
     try {
-      const response = await apiFetch('/api/orders', {
-        method: 'POST',
+      const response = await apiFetch(editingId ? `/api/orders/${editingId}` : '/api/orders', {
+        method: editingId ? 'PUT' : 'POST',
         body: JSON.stringify({
           orderNumber: form.orderNumber.trim(),
           customerId: form.customerId || null,
@@ -196,14 +229,38 @@ export default function OrdersPage() {
       }
       const saved: BackendOrder = await response.json();
       const customerNames = new Map(customers.map((customer) => [customer.id, customer.fullName]));
-      setOrders((current) => [mapOrder(saved, customerNames), ...(dataSource === 'live' ? current : [])]);
+      const mapped = mapOrder(saved, customerNames);
+      setOrders((current) =>
+        editingId
+          ? current.map((o) => (o.backendId === editingId ? mapped : o))
+          : [mapped, ...(dataSource === 'live' ? current : [])]
+      );
       setDataSource('live');
-      resetForm();
-      setShowForm(false);
+      closeForm();
     } catch {
       setFormError('The server could not be reached. Nothing was saved.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async (order: DisplayOrder) => {
+    if (!order.backendId) return;
+    setDeletingId(order.backendId);
+    setListError(null);
+    try {
+      const response = await apiFetch(`/api/orders/${order.backendId}`, { method: 'DELETE' });
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null);
+        setListError(body?.message ?? 'This order cannot be deleted.');
+        return;
+      }
+      if (!response.ok) throw new Error('Request failed');
+      setOrders((current) => current.filter((o) => o.backendId !== order.backendId));
+    } catch {
+      setListError('Could not delete this order. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -229,7 +286,7 @@ export default function OrdersPage() {
         </div>
         {canAdd && (
           <button
-            onClick={() => setShowForm((value) => !value)}
+            onClick={() => (showForm ? closeForm() : setShowForm(true))}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
           >
             {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -242,7 +299,7 @@ export default function OrdersPage() {
         <motion.form
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          onSubmit={handleAddOrder}
+          onSubmit={handleSubmit}
           className={`flex flex-col gap-4 rounded-[24px] border p-5 ${cardClass}`}
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -356,10 +413,16 @@ export default function OrdersPage() {
 
           <div>
             <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
-              <ShoppingBag className="h-4 w-4" /> {saving ? 'Saving…' : 'Save order'}
+              <ShoppingBag className="h-4 w-4" /> {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save order'}
             </button>
           </div>
         </motion.form>
+      )}
+
+      {listError && (
+        <p role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+          {listError}
+        </p>
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -405,7 +468,7 @@ export default function OrdersPage() {
 
       <div className={`overflow-hidden rounded-[24px] border ${cardClass}`}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
               <tr className={darkMode ? 'border-b border-white/10 text-slate-400' : 'border-b border-slate-100 text-slate-500'}>
                 <th className="px-5 py-3 font-medium">Order</th>
@@ -415,6 +478,7 @@ export default function OrdersPage() {
                 <th className="px-5 py-3 font-medium">Total</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Date</th>
+                {canAdd && <th className="px-5 py-3 font-medium text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${darkMode ? 'divide-white/5' : 'divide-slate-100'}`}>
@@ -427,11 +491,32 @@ export default function OrdersPage() {
                   <td className={`px-5 py-3.5 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{formatLkr(order.total)}</td>
                   <td className="px-5 py-3.5"><StatusBadge status={order.status} darkMode={darkMode} /></td>
                   <td className={`px-5 py-3.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{order.date}</td>
+                  {canAdd && (
+                    <td className="px-5 py-3.5">
+                      {order.backendId && (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => startEdit(order)}
+                            aria-label={`Edit ${order.id}`}
+                            className={`flex h-8 w-8 items-center justify-center rounded-full transition ${darkMode ? 'text-slate-400 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <ConfirmDeleteButton
+                            darkMode={darkMode}
+                            label={`Delete ${order.id}`}
+                            busy={deletingId === order.backendId}
+                            onConfirm={() => handleDelete(order)}
+                          />
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <td colSpan={canAdd ? 8 : 7} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     {orders.length === 0 ? 'No orders yet.' : 'No orders match your filters.'}
                   </td>
                 </tr>
