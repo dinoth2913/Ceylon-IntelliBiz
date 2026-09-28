@@ -38,6 +38,17 @@ public class MarketplaceOrder {
 
     private int quantity;
 
+    // unitPrice * quantity, before any coupon is applied.
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal subtotal;
+
+    // The coupon actually redeemed, snapshotted (the coupon itself may later change or be deleted).
+    private String couponCode;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal discountAmount;
+
+    // subtotal - discountAmount. This is still the field the rest of the app (and the dashboard) reads.
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal totalAmount;
 

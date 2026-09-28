@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CircleAlert, Inbox, Loader2, Mail, Package, Plus, RefreshCw, Star, Trash2, X } from 'lucide-react';
+import { CircleAlert, Inbox, Loader2, Mail, Package, Plus, RefreshCw, Star, Tag, Ticket, Trash2, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
+import { BarList } from '@/components/dashboard/bar-list';
 import { apiFetch } from '@/lib/auth';
 import { canWrite } from '@/lib/roles';
-import { formatPrice, type BackendProduct } from '@/lib/marketplace';
+import { formatDiscount, formatPrice, type BackendCategory, type BackendCoupon, type BackendProduct } from '@/lib/marketplace';
+
+const CATEGORY_COLORS = ['bg-cyan-400', 'bg-blue-500', 'bg-violet-500', 'bg-amber-400', 'bg-emerald-400', 'bg-rose-400', 'bg-slate-400'];
 
 type MarketplaceOrder = {
   id: string;
@@ -14,6 +17,9 @@ type MarketplaceOrder = {
   productTitle: string;
   unitPrice: number;
   quantity: number;
+  subtotal: number;
+  couponCode: string | null;
+  discountAmount: number;
   totalAmount: number;
   buyerName: string;
   buyerEmail: string;
@@ -37,6 +43,7 @@ function relativeTime(iso: string | null) {
 }
 
 const emptyForm = { title: '', description: '', price: '', category: '', features: '' };
+const emptyCouponForm = { code: '', discountType: 'PERCENT', discountValue: '', expiresAt: '' };
 
 export default function MarketplaceManagementPage() {
   const { darkMode } = useDashboardTheme();
@@ -47,6 +54,9 @@ export default function MarketplaceManagementPage() {
   const [productsState, setProductsState] = useState<LoadState>('loading');
   const [orders, setOrders] = useState<MarketplaceOrder[]>([]);
   const [ordersState, setOrdersState] = useState<LoadState>('loading');
+  const [categories, setCategories] = useState<BackendCategory[]>([]);
+  const [coupons, setCoupons] = useState<BackendCoupon[]>([]);
+  const [couponsState, setCouponsState] = useState<LoadState>('loading');
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -54,6 +64,16 @@ export default function MarketplaceManagementPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [newCategory, setNewCategory] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [couponForm, setCouponForm] = useState(emptyCouponForm);
+  const [savingCoupon, setSavingCoupon] = useState(false);
+  const [couponFormError, setCouponFormError] = useState<string | null>(null);
+  const [deletingCouponId, setDeletingCouponId] = useState<string | null>(null);
 
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
@@ -74,6 +94,17 @@ export default function MarketplaceManagementPage() {
     }
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/categories');
+      if (!response.ok) return;
+      const data: BackendCategory[] = await response.json();
+      if (Array.isArray(data)) setCategories(data);
+    } catch {
+      // Category management is a convenience — the product form still works with free text if this fails.
+    }
+  }, []);
+
   const loadOrders = useCallback(async () => {
     if (!canManage) return;
     setOrdersState('loading');
@@ -88,15 +119,44 @@ export default function MarketplaceManagementPage() {
     }
   }, [canManage]);
 
+  const loadCoupons = useCallback(async () => {
+    if (!canManage) return;
+    setCouponsState('loading');
+    try {
+      const response = await apiFetch('/api/coupons');
+      if (!response.ok) throw new Error('Request failed');
+      const data: BackendCoupon[] = await response.json();
+      setCoupons(Array.isArray(data) ? data : []);
+      setCouponsState('ready');
+    } catch {
+      setCouponsState('error');
+    }
+  }, [canManage]);
+
   useEffect(() => {
     void loadProducts();
+    void loadCategories();
     void loadOrders();
-  }, [loadProducts, loadOrders]);
+    void loadCoupons();
+  }, [loadProducts, loadCategories, loadOrders, loadCoupons]);
 
   const totalRequested = useMemo(
     () => orders.reduce((sum, order) => sum + order.totalAmount, 0),
     [orders]
   );
+
+  const categoryBreakdown = useMemo(() => {
+    const counts = new Map<string, number>();
+    products.forEach((product) => {
+      counts.set(product.category, (counts.get(product.category) ?? 0) + 1);
+    });
+    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    return entries.map(([label, count], index) => ({
+      label: `${label} (${count})`,
+      value: products.length ? Math.round((count / products.length) * 100) : 0,
+      color: CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+    }));
+  }, [products]);
 
   const handleAddProduct = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -153,6 +213,94 @@ export default function MarketplaceManagementPage() {
     }
   };
 
+  const handleAddCategory = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return;
+    setCategoryError(null);
+    try {
+      const response = await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify({ name }) });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setCategoryError(body?.message ?? 'Could not save this category.');
+        return;
+      }
+      const saved: BackendCategory = await response.json();
+      setCategories((current) => [...current, saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewCategory('');
+    } catch {
+      setCategoryError('The server could not be reached.');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    setDeletingCategoryId(id);
+    setCategoryError(null);
+    try {
+      const response = await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null);
+        setCategoryError(body?.message ?? 'This category is in use and cannot be deleted.');
+        return;
+      }
+      if (!response.ok) throw new Error('Request failed');
+      setCategories((current) => current.filter((c) => c.id !== id));
+    } catch {
+      setCategoryError('Could not delete this category.');
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  };
+
+  const handleAddCoupon = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (savingCoupon) return;
+    const discountValue = Number(couponForm.discountValue);
+    if (!couponForm.code.trim() || !Number.isFinite(discountValue) || discountValue <= 0) {
+      setCouponFormError('Enter a code and a valid discount amount.');
+      return;
+    }
+    setSavingCoupon(true);
+    setCouponFormError(null);
+    try {
+      const response = await apiFetch('/api/coupons', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: couponForm.code.trim(),
+          discountType: couponForm.discountType,
+          discountValue,
+          expiresAt: couponForm.expiresAt ? `${couponForm.expiresAt}T23:59:59Z` : null
+        })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setCouponFormError(body?.message ?? 'Could not save this coupon.');
+        return;
+      }
+      const saved: BackendCoupon = await response.json();
+      setCoupons((current) => [saved, ...current]);
+      setCouponForm(emptyCouponForm);
+      setShowCouponForm(false);
+    } catch {
+      setCouponFormError('The server could not be reached.');
+    } finally {
+      setSavingCoupon(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    setDeletingCouponId(id);
+    try {
+      const response = await apiFetch(`/api/coupons/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Request failed');
+      setCoupons((current) => current.filter((c) => c.id !== id));
+    } catch {
+      // Deletion failing is rare enough (no dependents block it) that a page-level error banner isn't needed here.
+    } finally {
+      setDeletingCouponId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -185,7 +333,16 @@ export default function MarketplaceManagementPage() {
           </label>
           <label className={labelClass}>
             Category
-            <input required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Add-on" className={inputClass} />
+            {categories.length > 0 ? (
+              <select required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputClass}>
+                <option value="">Select a category…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Add-on" className={inputClass} />
+            )}
           </label>
           <label className={`${labelClass} sm:col-span-2`}>
             Description
@@ -212,6 +369,55 @@ export default function MarketplaceManagementPage() {
         <p role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
           {deleteError}
         </p>
+      )}
+
+      {canManage && (
+        <section className={`rounded-[24px] border p-5 ${cardClass}`}>
+          <div className="flex items-center gap-2">
+            <Tag className={`h-4 w-4 ${muted}`} />
+            <h2 className={`text-sm font-semibold ${heading}`}>Categories</h2>
+          </div>
+          <p className={`mt-1 text-xs ${muted}`}>Managed here so the product form above doesn&apos;t end up with near-duplicates like &ldquo;Software&rdquo; and &ldquo;software&rdquo;.</p>
+          <form onSubmit={handleAddCategory} className="mt-3 flex gap-2">
+            <input
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="New category name"
+              className={`${inputClass} flex-1`}
+            />
+            <button type="submit" disabled={!newCategory.trim()} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+              Add
+            </button>
+          </form>
+          {categoryError && <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{categoryError}</p>}
+          {categories.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <span key={category.id} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${darkMode ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'}`}>
+                  {category.name}
+                  <button
+                    onClick={() => handleDeleteCategory(category.id)}
+                    disabled={deletingCategoryId === category.id}
+                    aria-label={`Delete category ${category.name}`}
+                    className="text-slate-400 hover:text-rose-500 disabled:opacity-50"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {categoryBreakdown.length > 0 && (
+        <section className={`rounded-[24px] border p-5 ${cardClass}`}>
+          <h2 className={`text-sm font-semibold ${heading}`}>Catalogue by category</h2>
+          <p className={`mt-0.5 text-xs ${muted}`}>Share of listed products in each category</p>
+          <div className="mt-4">
+            <BarList items={categoryBreakdown} darkMode={darkMode} />
+          </div>
+        </section>
       )}
 
       <section className="flex flex-col gap-4">
@@ -282,6 +488,87 @@ export default function MarketplaceManagementPage() {
       {canManage && (
         <section className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className={`text-lg font-semibold ${heading}`}>Coupons ({coupons.length})</h2>
+            <button
+              onClick={() => setShowCouponForm((value) => !value)}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+            >
+              {showCouponForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showCouponForm ? 'Close' : 'Add coupon'}
+            </button>
+          </div>
+
+          {showCouponForm && (
+            <motion.form
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              onSubmit={handleAddCoupon}
+              className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
+            >
+              <label className={labelClass}>
+                Code
+                <input required value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })} placeholder="SAVE10" className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Discount type
+                <select value={couponForm.discountType} onChange={(e) => setCouponForm({ ...couponForm, discountType: e.target.value })} className={inputClass}>
+                  <option value="PERCENT">Percent off</option>
+                  <option value="FIXED">Fixed amount (LKR)</option>
+                </select>
+              </label>
+              <label className={labelClass}>
+                {couponForm.discountType === 'PERCENT' ? 'Percent (1-100)' : 'Amount (LKR)'}
+                <input required type="number" min="1" max={couponForm.discountType === 'PERCENT' ? 100 : undefined} value={couponForm.discountValue} onChange={(e) => setCouponForm({ ...couponForm, discountValue: e.target.value })} placeholder={couponForm.discountType === 'PERCENT' ? '10' : '5000'} className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Expires (optional)
+                <input type="date" value={couponForm.expiresAt} onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })} className={inputClass} />
+              </label>
+              {couponFormError && <p className="sm:col-span-2 lg:col-span-4 text-sm text-rose-600 dark:text-rose-400">{couponFormError}</p>}
+              <div className="sm:col-span-2 lg:col-span-4">
+                <button type="submit" disabled={savingCoupon} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
+                  <Ticket className="h-4 w-4" /> {savingCoupon ? 'Saving…' : 'Save coupon'}
+                </button>
+              </div>
+            </motion.form>
+          )}
+
+          {couponsState === 'loading' && coupons.length === 0 && (
+            <div className={`flex items-center justify-center gap-2 rounded-[24px] border p-10 text-sm ${cardClass} ${muted}`}>
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading coupons…
+            </div>
+          )}
+
+          {couponsState === 'ready' && coupons.length === 0 && (
+            <div className={`rounded-[24px] border p-8 text-center text-sm ${cardClass} ${muted}`}>No coupons yet.</div>
+          )}
+
+          {coupons.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {coupons.map((coupon) => (
+                <div key={coupon.id} className={`flex items-center justify-between rounded-2xl border p-4 ${cardClass}`}>
+                  <div className="min-w-0">
+                    <p className={`font-mono text-sm font-semibold ${heading}`}>{coupon.code}</p>
+                    <p className={`text-xs ${muted}`}>{formatDiscount(coupon)}{coupon.expiresAt ? ` · expires ${new Date(coupon.expiresAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}` : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCoupon(coupon.id)}
+                    disabled={deletingCouponId === coupon.id}
+                    aria-label={`Delete coupon ${coupon.code}`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition disabled:opacity-50 ${darkMode ? 'text-slate-400 hover:bg-rose-400/10 hover:text-rose-300' : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {canManage && (
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className={`text-lg font-semibold ${heading}`}>Purchase requests ({orders.length})</h2>
             <div className="flex items-center gap-3">
               {orders.length > 0 && <span className={`text-sm ${muted}`}>{formatPrice(totalRequested)} requested total</span>}
@@ -334,12 +621,18 @@ export default function MarketplaceManagementPage() {
                       <p className={`mt-0.5 text-sm ${muted}`}>{order.buyerCompany ?? order.buyerEmail}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {order.couponCode && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
+                          <Tag className="h-3 w-3" /> {order.couponCode}
+                        </span>
+                      )}
                       <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300">{order.status}</span>
                       <span className={`text-xs ${muted}`}>{relativeTime(order.createdAt)}</span>
                     </div>
                   </div>
                   <p className={`mt-3 text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                    {order.quantity} × {order.productTitle} ({formatPrice(order.unitPrice)} each) — <span className={`font-semibold ${heading}`}>{formatPrice(order.totalAmount)}</span>
+                    {order.quantity} × {order.productTitle} ({formatPrice(order.unitPrice)} each)
+                    {order.discountAmount > 0 && <> · {formatPrice(order.discountAmount)} off</>} — <span className={`font-semibold ${heading}`}>{formatPrice(order.totalAmount)}</span>
                   </p>
                   <a
                     href={`mailto:${order.buyerEmail}?subject=${encodeURIComponent(`Your Ceylon IntelliBiz request: ${order.productTitle}`)}`}

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ShoppingCart, ShieldCheck, CheckCircle2, MessageSquare, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Heart, ShoppingCart, ShieldCheck, CheckCircle2, MessageSquare, Minus, Plus } from 'lucide-react';
 import { SiteShell } from '@/components/site-shell';
 import { StarRating } from '@/components/star-rating';
 import { apiFetch, getSession, API_BASE_URL, type AuthSession } from '@/lib/auth';
 import { formatPrice, formatReviewDate, type BackendProduct, type BackendReview } from '@/lib/marketplace';
+import { isWishlisted, toggleWishlist } from '@/lib/wishlist';
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   const [product, setProduct] = useState<BackendProduct | null>(null);
@@ -20,10 +21,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setSession(getSession());
-  }, []);
+    setSaved(isWishlisted(params.id));
+  }, [params.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,9 +220,23 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           {/* Sidebar / Purchase Card */}
           <div className="space-y-6">
             <div className="sticky top-6 rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/90">
-              <div className="mb-4">
-                <p className="text-sm font-medium text-slate-500">Price</p>
-                <p className="mt-1 text-3xl font-bold text-slate-950 dark:text-white">{formatPrice(product.price)}</p>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">Price</p>
+                  <p className="mt-1 text-3xl font-bold text-slate-950 dark:text-white">{formatPrice(product.price)}</p>
+                </div>
+                <button
+                  onClick={() => setSaved(toggleWishlist({ id: params.id, title: product.title, price: product.price, category: product.category }))}
+                  aria-label={saved ? 'Remove from wishlist' : 'Save to wishlist'}
+                  aria-pressed={saved}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition ${
+                    saved
+                      ? 'border-rose-200 bg-rose-50 text-rose-500 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300'
+                      : 'border-slate-200 text-slate-400 hover:text-rose-500 dark:border-white/10 dark:text-slate-500'
+                  }`}
+                >
+                  <Heart className={`h-5 w-5 ${saved ? 'fill-current' : ''}`} />
+                </button>
               </div>
 
               <div className="mb-6">

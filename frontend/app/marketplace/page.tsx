@@ -1,17 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, Search } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles, Search, Heart } from 'lucide-react';
 import { SiteShell } from '@/components/site-shell';
 import { ProductCard } from '@/components/product-card';
 import { API_BASE_URL } from '@/lib/auth';
 import { formatPrice, type BackendProduct } from '@/lib/marketplace';
+import { getWishlist } from '@/lib/wishlist';
 
 export default function MarketplacePage() {
   const [products, setProducts] = useState<BackendProduct[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('All');
+  const [wishlistCount, setWishlistCount] = useState(0);
+
+  useEffect(() => {
+    setWishlistCount(getWishlist().length);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,15 +73,23 @@ export default function MarketplacePage() {
             </h1>
           </div>
 
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-cyan-400 dark:border-white/10 dark:bg-slate-950/50 dark:text-white"
-            />
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-cyan-400 dark:border-white/10 dark:bg-slate-950/50 dark:text-white"
+              />
+            </div>
+            <Link
+              href="/marketplace/wishlist"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+            >
+              <Heart className="h-4 w-4" /> Wishlist{wishlistCount > 0 ? ` (${wishlistCount})` : ''}
+            </Link>
           </div>
         </div>
 
@@ -114,6 +129,7 @@ export default function MarketplacePage() {
                 title={product.title}
                 description={product.description}
                 price={formatPrice(product.price)}
+                rawPrice={product.price}
                 rating={product.rating}
                 reviews={product.reviewCount}
                 category={product.category}

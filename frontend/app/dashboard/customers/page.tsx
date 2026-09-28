@@ -23,7 +23,7 @@ type BackendCustomer = {
   createdAt: string | null;
 };
 
-type DisplayCustomer = CustomerRecord & { backendId: string | null };
+type DisplayCustomer = CustomerRecord & { backendId: string | null; createdAt: string | null };
 
 function relativeTime(iso: string | null) {
   if (!iso) return '—';
@@ -41,6 +41,7 @@ function mapCustomer(record: BackendCustomer): DisplayCustomer {
   return {
     id: `CUS-${shortId(record.id)}`,
     backendId: record.id,
+    createdAt: record.createdAt,
     name: record.fullName,
     company: record.companyName ?? '—',
     email: record.email ?? '—',
@@ -60,10 +61,12 @@ export default function CustomersPage() {
   const { darkMode } = useDashboardTheme();
   const { user } = useDashboardUser();
   const canAdd = canWrite('customers', user?.role);
-  const [customers, setCustomers] = useState<DisplayCustomer[]>(seedCustomers.map((c) => ({ ...c, backendId: null })));
+  const [customers, setCustomers] = useState<DisplayCustomer[]>(seedCustomers.map((c) => ({ ...c, backendId: null, createdAt: null })));
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [query, setQuery] = useState('');
   const [segment, setSegment] = useState<(typeof segments)[number]>('All');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -103,9 +106,12 @@ export default function CustomersPage() {
         query.trim() === '' ||
         customer.name.toLowerCase().includes(query.toLowerCase()) ||
         customer.company.toLowerCase().includes(query.toLowerCase());
-      return matchesSegment && matchesQuery;
+      const createdAt = customer.createdAt ? new Date(customer.createdAt).getTime() : null;
+      const matchesFrom = !dateFrom || (createdAt !== null && createdAt >= new Date(dateFrom).getTime());
+      const matchesTo = !dateTo || (createdAt !== null && createdAt <= new Date(dateTo).getTime() + 86_400_000 - 1);
+      return matchesSegment && matchesQuery && matchesFrom && matchesTo;
     });
-  }, [customers, query, segment]);
+  }, [customers, query, segment, dateFrom, dateTo]);
 
   const closeForm = () => {
     setShowForm(false);
@@ -289,6 +295,20 @@ export default function CustomersPage() {
             </button>
           ))}
         </div>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="Joined from"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="Joined to"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
       </div>
 
       <div className={`overflow-hidden rounded-[24px] border ${cardClass}`}>

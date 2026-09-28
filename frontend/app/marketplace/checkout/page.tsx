@@ -2,12 +2,19 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, ShieldCheck, CheckCircle2, Mail } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, CheckCircle2, Mail, Tag, X } from 'lucide-react';
 import { SiteShell } from '@/components/site-shell';
 import Link from 'next/link';
 import { API_BASE_URL, getSession } from '@/lib/auth';
-import { formatPrice, type BackendProduct } from '@/lib/marketplace';
+import { formatPrice, type BackendProduct, type BackendCoupon } from '@/lib/marketplace';
 import { shortId } from '@/lib/utils';
+
+type CouponPreview = Pick<BackendCoupon, 'code' | 'discountType' | 'discountValue'>;
+
+function previewDiscount(coupon: CouponPreview, subtotal: number): number {
+  const raw = coupon.discountType === 'PERCENT' ? (subtotal * coupon.discountValue) / 100 : coupon.discountValue;
+  return Math.min(raw, subtotal);
+}
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -19,7 +26,12 @@ function CheckoutContent() {
   const [form, setForm] = useState({ name: '', email: '', company: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<{ id: string; total: number } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ id: string; total: number; discountAmount: number; couponCode: string | null } | null>(null);
+
+  const [couponInput, setCouponInput] = useState('');
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   useEffect(() => {
     const session = getSession();
@@ -54,6 +66,33 @@ function CheckoutContent() {
     };
   }, [productId]);
 
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code || couponChecking) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/coupons/validate/${encodeURIComponent(code)}`, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) {
+        setCouponPreview(null);
+        setCouponError('Invalid or expired coupon code.');
+        return;
+      }
+      setCouponPreview(await response.json());
+    } catch {
+      setCouponPreview(null);
+      setCouponError('Could not check that code right now. Please try again.');
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCouponPreview(null);
+    setCouponInput('');
+    setCouponError(null);
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting || !productId) return;
@@ -68,13 +107,23 @@ function CheckoutContent() {
           quantity,
           buyerName: form.name.trim(),
           buyerEmail: form.email.trim(),
-          buyerCompany: form.company.trim() || null
+          buyerCompany: form.company.trim() || null,
+          couponCode: couponPreview?.code || null
         }),
         signal: AbortSignal.timeout(10000)
       });
-      if (!response.ok) throw new Error('Request failed');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setSubmitError(body?.message ?? 'Could not send your request. Please try again, or email hello@ceylonintellibiz.com.');
+        return;
+      }
       const saved = await response.json();
-      setConfirmation({ id: saved.id, total: saved.totalAmount });
+      setConfirmation({
+        id: saved.id,
+        total: saved.totalAmount,
+        discountAmount: saved.discountAmount ?? 0,
+        couponCode: saved.couponCode ?? null
+      });
     } catch {
       setSubmitError('Could not send your request. Please try again, or email hello@ceylonintellibiz.com.');
     } finally {
@@ -105,7 +154,8 @@ function CheckoutContent() {
         </div>
         <h2 className="text-3xl font-bold text-slate-950 dark:text-white">Request received!</h2>
         <p className="mt-3 text-slate-600 dark:text-slate-400">
-          Reference <strong>REQ-{shortId(confirmation.id)}</strong> for <strong>{product?.title}</strong> ({formatPrice(confirmation.total)} total).
+          Reference <strong>REQ-{shortId(confirmation.id)}</strong> for <strong>{product?.title}</strong> ({formatPrice(confirmation.total)} total
+          {confirmation.couponCode ? `, ${confirmation.couponCode} applied` : ''}).
         </p>
         <p className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <Mail className="h-4 w-4" /> We don&apos;t have a payment gateway connected yet, so our sales team will email you to arrange payment.
@@ -122,7 +172,9 @@ function CheckoutContent() {
 
   if (!product) return null;
 
-  const total = product.price * quantity;
+  const subtotal = product.price * quantity;
+  const discount = couponPreview ? previewDiscount(couponPreview, subtotal) : 0;
+  const total = subtotal - discount;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -196,9 +248,47 @@ function CheckoutContent() {
                 <p className="font-medium text-slate-900 dark:text-white">{product.title}</p>
                 <p className="text-sm text-slate-500">Qty: {quantity}</p>
               </div>
-              <p className="font-medium text-slate-900 dark:text-white">{formatPrice(total)}</p>
+              <p className="font-medium text-slate-900 dark:text-white">{formatPrice(subtotal)}</p>
             </div>
-            <div className="mt-4 flex items-center justify-between">
+
+            <div className="border-b border-slate-200 py-4 dark:border-white/10">
+              {couponPreview ? (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm dark:border-emerald-400/20 dark:bg-emerald-400/10">
+                  <span className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
+                    <Tag className="h-3.5 w-3.5" /> {couponPreview.code} applied
+                  </span>
+                  <button type="button" onClick={removeCoupon} aria-label="Remove coupon" className="text-emerald-700 hover:text-emerald-900 dark:text-emerald-300">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="Coupon code"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400 dark:border-white/10 dark:bg-slate-950 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={!couponInput.trim() || couponChecking}
+                    className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50 dark:bg-white dark:text-slate-950"
+                  >
+                    {couponChecking ? 'Checking…' : 'Apply'}
+                  </button>
+                </div>
+              )}
+              {couponError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{couponError}</p>}
+            </div>
+
+            {discount > 0 && (
+              <div className="flex items-center justify-between pt-4 text-sm text-emerald-700 dark:text-emerald-300">
+                <p>Discount</p>
+                <p>-{formatPrice(discount)}</p>
+              </div>
+            )}
+            <div className="mt-2 flex items-center justify-between">
               <p className="font-bold text-slate-900 dark:text-white">Total</p>
               <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{formatPrice(total)}</p>
             </div>

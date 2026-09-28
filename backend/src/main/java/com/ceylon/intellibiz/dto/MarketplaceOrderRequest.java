@@ -12,6 +12,8 @@ public record MarketplaceOrderRequest(
     @Min(1) @Max(100) int quantity,
     @NotBlank @Size(max = 255) String buyerName,
     @NotBlank @Email @Size(max = 255) String buyerEmail,
-    @Size(max = 255) String buyerCompany
+    @Size(max = 255) String buyerCompany,
+    // Optional. Re-validated server-side (see MarketplaceOrderController) — never trusted from a client-side preview.
+    @Size(max = 40) String couponCode
 ) {
 }

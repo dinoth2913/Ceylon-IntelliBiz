@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -72,6 +73,7 @@ class ContactRequestApiTest {
                         Collections.reverse(newestFirst);
                         yield newestFirst;
                     }
+                    case "findById" -> STORE.stream().filter(r -> r.getId().equals(args[0])).findFirst();
                     case "hashCode" -> System.identityHashCode(proxy);
                     case "equals" -> proxy == args[0];
                     case "toString" -> "FakeContactRequestRepository";
@@ -171,5 +173,55 @@ class ContactRequestApiTest {
             .andExpect(jsonPath("$[0].name").value("Second"))
             .andExpect(jsonPath("$[1].name").value("First"))
             .andExpect(jsonPath("$[0].status").value("New"));
+    }
+
+    @Test
+    void aSalesOrAdminUserCanUpdateStatus() throws Exception {
+        submit(body("Asha", "asha@company.lk", "Ceylon Traders", "hi", null), 201);
+        String id = STORE.get(0).getId();
+
+        mockMvc.perform(patch("/api/contact-requests/" + id)
+                .header("Authorization", bearer("SALES"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"In Progress\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("In Progress"));
+        assertEquals("In Progress", STORE.get(0).getStatus());
+    }
+
+    @Test
+    void anUnknownStatusValueIsRejected() throws Exception {
+        submit(body("Asha", "asha@company.lk", "Ceylon Traders", "hi", null), 201);
+        String id = STORE.get(0).getId();
+
+        mockMvc.perform(patch("/api/contact-requests/" + id)
+                .header("Authorization", bearer("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"Archived\"}"))
+            .andExpect(status().isBadRequest());
+        assertEquals("New", STORE.get(0).getStatus());
+    }
+
+    @Test
+    void updatingAnUnknownIdReturnsNotFound() throws Exception {
+        mockMvc.perform(patch("/api/contact-requests/does-not-exist")
+                .header("Authorization", bearer("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"Resolved\"}"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void onlySalesAndAdminsMayUpdateStatus() throws Exception {
+        submit(body("Asha", "asha@company.lk", "Ceylon Traders", "hi", null), 201);
+        String id = STORE.get(0).getId();
+
+        for (String role : new String[] {"FINANCE", "STAFF"}) {
+            mockMvc.perform(patch("/api/contact-requests/" + id)
+                    .header("Authorization", bearer(role))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"status\":\"Resolved\"}"))
+                .andExpect(status().isForbidden());
+        }
     }
 }

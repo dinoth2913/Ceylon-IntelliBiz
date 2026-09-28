@@ -69,6 +69,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/chat").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/contact-requests").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/marketplace-orders").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/coupons/validate/**").permitAll()
 
                 // --- Any signed-in user, whatever their role ---
                 .requestMatchers("/api/auth/me").authenticated()
@@ -83,6 +85,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/contact-requests/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
                 .requestMatchers("/api/products/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
                 .requestMatchers("/api/marketplace-orders/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
+                .requestMatchers("/api/categories/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
+                .requestMatchers("/api/coupons/**").hasAnyRole(Roles.ADMIN, Roles.SALES)
 
                 // --- Business data: everyone with a business role can read ---
                 .requestMatchers("/api/ai/**").hasAnyRole(business)

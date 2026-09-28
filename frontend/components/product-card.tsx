@@ -1,30 +1,56 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingCart } from 'lucide-react';
+import { Heart, ShoppingCart } from 'lucide-react';
 import { StarRating } from './star-rating';
 import { cn } from '@/lib/utils';
+import { isWishlisted, toggleWishlist } from '@/lib/wishlist';
 
 interface ProductCardProps {
   id: string;
   title: string;
   description: string;
   price: string;
+  rawPrice: number;
   rating: number;
   reviews: number;
   category: string;
   className?: string;
 }
 
-export function ProductCard({ id, title, description, price, rating, reviews, category, className }: ProductCardProps) {
+export function ProductCard({ id, title, description, price, rawPrice, rating, reviews, category, className }: ProductCardProps) {
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSaved(isWishlisted(id));
+  }, [id]);
+
+  const handleToggleWishlist = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSaved(toggleWishlist({ id, title, price: rawPrice, category }));
+  };
+
   return (
     <div className={cn('group flex flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white/70 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-white/10 dark:bg-slate-900/60', className)}>
       <div className="relative aspect-video w-full bg-slate-100 dark:bg-slate-800">
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-900">
           <span className="text-sm font-medium text-slate-400 dark:text-slate-500">{category} image placeholder</span>
         </div>
+        <button
+          onClick={handleToggleWishlist}
+          aria-label={saved ? `Remove ${title} from wishlist` : `Save ${title} to wishlist`}
+          aria-pressed={saved}
+          className={cn(
+            'absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-sm transition',
+            saved ? 'bg-rose-500 text-white' : 'bg-white/80 text-slate-500 hover:text-rose-500 dark:bg-slate-950/70 dark:text-slate-300'
+          )}
+        >
+          <Heart className={cn('h-4 w-4', saved && 'fill-current')} />
+        </button>
       </div>
-      
+
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-center justify-between gap-2">
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
@@ -47,7 +73,7 @@ export function ProductCard({ id, title, description, price, rating, reviews, ca
 
         <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-white/5">
           <p className="text-xl font-bold text-slate-900 dark:text-white">{price}</p>
-          <Link 
+          <Link
             href={`/marketplace/${id}`}
             className="flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
           >

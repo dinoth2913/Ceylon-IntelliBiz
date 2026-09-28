@@ -1,6 +1,8 @@
 package com.ceylon.intellibiz.controller;
 
+import com.ceylon.intellibiz.dto.ApiError;
 import com.ceylon.intellibiz.dto.ContactRequestForm;
+import com.ceylon.intellibiz.dto.ContactRequestStatusUpdate;
 import com.ceylon.intellibiz.model.ContactRequest;
 import com.ceylon.intellibiz.repository.ContactRequestRepository;
 import jakarta.validation.Valid;
@@ -41,5 +43,18 @@ public class ContactRequestController {
     @GetMapping
     public List<ContactRequest> list() {
         return contactRequestRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<?> updateStatus(@PathVariable String id, @Valid @RequestBody ContactRequestStatusUpdate update) {
+        if (!ContactRequest.STATUSES.contains(update.status())) {
+            return ResponseEntity.badRequest().body(new ApiError("status must be one of: " + ContactRequest.STATUSES));
+        }
+        return contactRequestRepository.findById(id)
+            .<ResponseEntity<?>>map(request -> {
+                request.setStatus(update.status());
+                return ResponseEntity.ok(contactRequestRepository.save(request));
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
 }

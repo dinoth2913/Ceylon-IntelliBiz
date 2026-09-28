@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CircleDollarSign, FileWarning, Pencil, Plus, Radio, ReceiptText, Wallet, X } from 'lucide-react';
+import { CircleDollarSign, FileWarning, Pencil, Plus, Radio, ReceiptText, Search, Wallet, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusBadge } from '@/components/dashboard/status-badge';
@@ -25,7 +25,7 @@ type BackendInvoice = {
 
 type BackendCustomer = { id: string; fullName: string };
 
-type DisplayInvoice = InvoiceRecord & { backendId: string | null; customerId: string | null; dueDateIso: string | null };
+type DisplayInvoice = InvoiceRecord & { backendId: string | null; customerId: string | null; dueDateIso: string | null; createdAtIso: string | null };
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
@@ -51,7 +51,8 @@ function mapInvoice(record: BackendInvoice, customerNames: Map<string, string>):
     status: (record.status as InvoiceRecord['status']) ?? 'Draft',
     issued: formatDate(record.createdAt),
     due: formatDate(record.dueDate),
-    dueDateIso: record.dueDate
+    dueDateIso: record.dueDate,
+    createdAtIso: record.createdAt
   };
 }
 
@@ -66,9 +67,13 @@ export default function FinancePage() {
   const { user } = useDashboardUser();
   const canAdd = canWrite('invoices', user?.role);
   const [invoices, setInvoices] = useState<DisplayInvoice[]>(
-    seedInvoices.map((i) => ({ ...i, backendId: null, customerId: null, dueDateIso: null }))
+    seedInvoices.map((i) => ({ ...i, backendId: null, customerId: null, dueDateIso: null, createdAtIso: null }))
   );
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | (typeof invoiceStatuses)[number]>('All');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
   const labelClass = `flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`;
@@ -111,6 +116,20 @@ export default function FinancePage() {
   const paid = invoices.filter((i) => i.status === 'Paid').reduce((sum, i) => sum + i.amount, 0);
   const outstanding = invoices.filter((i) => i.status === 'Outstanding').reduce((sum, i) => sum + i.amount, 0);
   const overdue = invoices.filter((i) => i.status === 'Overdue').reduce((sum, i) => sum + i.amount, 0);
+
+  const filtered = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const matchesStatus = statusFilter === 'All' || invoice.status === statusFilter;
+      const matchesQuery =
+        query.trim() === '' ||
+        invoice.id.toLowerCase().includes(query.toLowerCase()) ||
+        invoice.customer.toLowerCase().includes(query.toLowerCase());
+      const createdAt = invoice.createdAtIso ? new Date(invoice.createdAtIso).getTime() : null;
+      const matchesFrom = !dateFrom || (createdAt !== null && createdAt >= new Date(dateFrom).getTime());
+      const matchesTo = !dateTo || (createdAt !== null && createdAt <= new Date(dateTo).getTime() + 86_400_000 - 1);
+      return matchesStatus && matchesQuery && matchesFrom && matchesTo;
+    });
+  }, [invoices, query, statusFilter, dateFrom, dateTo]);
 
   const closeForm = () => {
     setShowForm(false);
@@ -285,6 +304,46 @@ export default function FinancePage() {
         <StatCard label="Invoices issued" value={String(invoices.length)} icon={ReceiptText} accent="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300" index={3} />
       </div>
 
+      <div className={`flex flex-wrap items-center gap-3 rounded-[24px] border p-4 ${cardClass}`}>
+        <div className={`flex flex-1 min-w-[200px] items-center gap-2 rounded-full border px-4 py-2 ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-300' : 'border-slate-200 bg-white text-slate-500'}`}>
+          <Search className="h-4 w-4" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by invoice number or customer" className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(['All', ...invoiceStatuses] as const).map((item) => (
+            <button
+              key={item}
+              onClick={() => setStatusFilter(item)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                statusFilter === item
+                  ? darkMode
+                    ? 'bg-cyan-400/10 text-cyan-300 border border-cyan-400/30'
+                    : 'bg-slate-950 text-white'
+                  : darkMode
+                    ? 'border border-white/10 text-slate-300 hover:bg-white/5'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="Issued from"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="Issued to"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
+      </div>
+
       <div className={`overflow-hidden rounded-[24px] border ${cardClass}`}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
@@ -300,7 +359,7 @@ export default function FinancePage() {
               </tr>
             </thead>
             <tbody className={`divide-y ${darkMode ? 'divide-white/5' : 'divide-slate-100'}`}>
-              {invoices.map((invoice) => (
+              {filtered.map((invoice) => (
                 <tr key={invoice.id} className={darkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}>
                   <td className={`px-5 py-3.5 font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{invoice.id}</td>
                   <td className={`px-5 py-3.5 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{invoice.customer}</td>
@@ -331,10 +390,10 @@ export default function FinancePage() {
                   )}
                 </tr>
               ))}
-              {invoices.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
                   <td colSpan={canAdd ? 7 : 6} className={`px-5 py-8 text-center text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    No invoices yet.
+                    {invoices.length === 0 ? 'No invoices yet.' : 'No invoices match your filters.'}
                   </td>
                 </tr>
               )}

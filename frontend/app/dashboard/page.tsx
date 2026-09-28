@@ -26,30 +26,45 @@ import {
   type AiInsight
 } from '@/lib/dashboard-data';
 
-type OrderRow = { id: string; customer: string; total: number; status: string };
-type InvoiceRow = { amount: number; status: string };
+type OrderRow = { id: string; customer: string; total: number; status: string; createdAt: string | null };
+type InvoiceRow = { id: string; customer: string; amount: number; status: string; createdAt: string | null };
 type StockRow = { id: string; name: string; warehouse: string; stock: number; reorderLevel: number };
+type CustomerRow = { name: string; createdAt: string | null };
 
 type Snapshot = {
   customers: number;
+  customerList: CustomerRow[];
   orders: OrderRow[];
   invoices: InvoiceRow[];
   stock: StockRow[];
 };
 
-type BackendCustomer = { id: string; fullName: string };
+type BackendCustomer = { id: string; fullName: string; createdAt: string | null };
 type BackendOrder = { id: string; orderNumber: string; customerId: string | null; totalAmount: number; status: string; createdAt: string | null };
-type BackendInvoice = { totalAmount: number; status: string };
+type BackendInvoice = { invoiceNumber: string; customerId: string | null; totalAmount: number; status: string; createdAt: string | null };
 type BackendInventoryItem = { id: string; name: string; warehouse: string | null; stockQuantity: number | null; reorderLevel: number | null };
 
 const sampleSnapshot: Snapshot = {
   customers: sampleCustomers.length,
-  orders: sampleOrders.map((order) => ({ id: order.id, customer: order.customer, total: order.total, status: order.status })),
-  invoices: sampleInvoices.map((invoice) => ({ amount: invoice.amount, status: invoice.status })),
+  customerList: [],
+  orders: sampleOrders.map((order) => ({ id: order.id, customer: order.customer, total: order.total, status: order.status, createdAt: null })),
+  invoices: sampleInvoices.map((invoice) => ({ id: invoice.id, customer: invoice.customer, amount: invoice.amount, status: invoice.status, createdAt: null })),
   stock: sampleInventory.map((item) => ({ id: item.id, name: item.name, warehouse: item.warehouse, stock: item.stock, reorderLevel: item.reorderLevel }))
 };
 
 const norm = (status: string) => status.trim().toLowerCase();
+
+function relativeTime(iso: string | null) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
 
 async function loadLiveSnapshot(): Promise<Snapshot | null> {
   try {
@@ -68,13 +83,21 @@ async function loadLiveSnapshot(): Promise<Snapshot | null> {
 
     return {
       customers: customers.length,
+      customerList: customers.map((customer) => ({ name: customer.fullName, createdAt: customer.createdAt })),
       orders: newestFirst.map((order) => ({
         id: order.orderNumber,
         customer: names.get(order.customerId ?? '') ?? 'Unknown customer',
         total: order.totalAmount,
-        status: order.status
+        status: order.status,
+        createdAt: order.createdAt
       })),
-      invoices: invoices.map((invoice) => ({ amount: invoice.totalAmount, status: invoice.status })),
+      invoices: invoices.map((invoice) => ({
+        id: invoice.invoiceNumber,
+        customer: names.get(invoice.customerId ?? '') ?? 'Unknown customer',
+        amount: invoice.totalAmount,
+        status: invoice.status,
+        createdAt: invoice.createdAt
+      })),
       stock: inventory.map((item) => ({
         id: `INV-${shortId(item.id)}`,
         name: item.name,
@@ -133,16 +156,46 @@ export default function DashboardOverviewPage() {
   }, []);
 
   const isLive = dataSource === 'live';
-  const { customers, orders, invoices, stock } = snapshot;
+  const { customers, customerList, orders, invoices, stock } = snapshot;
 
   const derived = useMemo(() => {
     const lowStock = stock.filter((item) => item.stock <= item.reorderLevel);
     const openOrders = countStatus(orders, 'processing') + countStatus(orders, 'pending payment');
+
+    type Event = { id: string; text: string; timestamp: number; iso: string | null };
+    const events: Event[] = [
+      ...orders
+        .filter((order) => order.createdAt)
+        .map((order) => ({
+          id: `order-${order.id}`,
+          text: `New order ${order.id} from ${order.customer} — ${formatLkr(order.total)}`,
+          timestamp: Date.parse(order.createdAt ?? '') || 0,
+          iso: order.createdAt
+        })),
+      ...invoices
+        .filter((invoice) => invoice.createdAt)
+        .map((invoice) => ({
+          id: `invoice-${invoice.id}`,
+          text: `Invoice ${invoice.id} issued to ${invoice.customer} — ${formatLkr(invoice.amount)}`,
+          timestamp: Date.parse(invoice.createdAt ?? '') || 0,
+          iso: invoice.createdAt
+        })),
+      ...customerList
+        .filter((customer) => customer.createdAt)
+        .map((customer) => ({
+          id: `customer-${customer.name}-${customer.createdAt}`,
+          text: `New customer added: ${customer.name}`,
+          timestamp: Date.parse(customer.createdAt ?? '') || 0,
+          iso: customer.createdAt
+        }))
+    ].sort((a, b) => b.timestamp - a.timestamp);
+
     return {
       lowStock,
       openOrders,
       collected: sumAmount(invoices, ['paid']),
       outstanding: sumAmount(invoices, ['outstanding', 'overdue']),
+      activity: events.slice(0, 6),
       orderBars: toBars([
         { label: 'Fulfilled', count: countStatus(orders, 'fulfilled'), color: 'bg-emerald-400' },
         { label: 'Processing', count: countStatus(orders, 'processing'), color: 'bg-sky-400' },
@@ -156,7 +209,7 @@ export default function DashboardOverviewPage() {
         { label: 'Draft', count: countStatus(invoices, 'draft'), color: 'bg-slate-400' }
       ])
     };
-  }, [orders, invoices, stock]);
+  }, [orders, invoices, stock, customerList]);
 
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const muted = darkMode ? 'text-slate-400' : 'text-slate-500';
@@ -305,8 +358,25 @@ export default function DashboardOverviewPage() {
         </motion.div>
       </div>
 
-      <div className={`grid gap-4 ${isLive ? '' : 'lg:grid-cols-[1fr_1.2fr]'}`}>
-        {!isLive && (
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+        {isLive ? (
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24, duration: 0.45 }} className={panel}>
+            <h2 className={`text-lg font-semibold ${heading}`}>Recent activity</h2>
+            {derived.activity.length === 0 ? (
+              <p className={`mt-4 text-sm ${muted}`}>Activity will show up here as customers, orders and invoices are added.</p>
+            ) : (
+              <div className={`mt-4 flex flex-col gap-4 border-l pl-4 ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>
+                {derived.activity.map((item) => (
+                  <div key={item.id} className="relative">
+                    <span className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ${darkMode ? 'bg-cyan-400' : 'bg-blue-600'}`} />
+                    <p className={`text-sm ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{item.text}</p>
+                    <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{relativeTime(item.iso)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        ) : (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24, duration: 0.45 }} className={panel}>
             <h2 className={`text-lg font-semibold ${heading}`}>Recent activity (sample)</h2>
             <div className={`mt-4 flex flex-col gap-4 border-l pl-4 ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>

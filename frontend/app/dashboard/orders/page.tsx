@@ -31,7 +31,7 @@ type BackendCustomer = { id: string; fullName: string };
 
 type LineItemDraft = { description: string; quantity: string; unitPrice: string };
 
-type DisplayOrder = OrderRecord & { backendId: string | null; customerId: string | null; rawItems: BackendLineItem[] };
+type DisplayOrder = OrderRecord & { backendId: string | null; customerId: string | null; rawItems: BackendLineItem[]; createdAt: string | null };
 
 const emptyLineItem: LineItemDraft = { description: '', quantity: '1', unitPrice: '' };
 
@@ -47,6 +47,7 @@ function mapOrder(record: BackendOrder, customerNames: Map<string, string>): Dis
     id: record.orderNumber,
     backendId: record.id,
     customerId: record.customerId,
+    createdAt: record.createdAt,
     customer: customerNames.get(record.customerId ?? '') ?? 'Unknown customer',
     items: record.items?.length ? record.items.length : 1,
     rawItems: record.items ?? [],
@@ -73,10 +74,12 @@ export default function OrdersPage() {
   const { darkMode } = useDashboardTheme();
   const { user } = useDashboardUser();
   const canAdd = canWrite('orders', user?.role);
-  const [orders, setOrders] = useState<DisplayOrder[]>(seedOrders.map((o) => ({ ...o, backendId: null, customerId: null, rawItems: [] })));
+  const [orders, setOrders] = useState<DisplayOrder[]>(seedOrders.map((o) => ({ ...o, backendId: null, customerId: null, rawItems: [], createdAt: null })));
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [status, setStatus] = useState<(typeof statuses)[number]>('All');
   const [query, setQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
   const labelClass = `flex flex-col gap-1.5 text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`;
@@ -121,9 +124,12 @@ export default function OrdersPage() {
     return orders.filter((order) => {
       const matchesStatus = status === 'All' || order.status === status;
       const matchesQuery = query.trim() === '' || order.customer.toLowerCase().includes(query.toLowerCase()) || order.id.toLowerCase().includes(query.toLowerCase());
-      return matchesStatus && matchesQuery;
+      const createdAt = order.createdAt ? new Date(order.createdAt).getTime() : null;
+      const matchesFrom = !dateFrom || (createdAt !== null && createdAt >= new Date(dateFrom).getTime());
+      const matchesTo = !dateTo || (createdAt !== null && createdAt <= new Date(dateTo).getTime() + 86_400_000 - 1);
+      return matchesStatus && matchesQuery && matchesFrom && matchesTo;
     });
-  }, [orders, status, query]);
+  }, [orders, status, query, dateFrom, dateTo]);
 
   const totals = {
     processing: orders.filter((o) => o.status === 'Processing').length,
@@ -464,6 +470,20 @@ export default function OrdersPage() {
             </button>
           ))}
         </div>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          title="From date"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          title="To date"
+          className={`rounded-full border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}
+        />
       </div>
 
       <div className={`overflow-hidden rounded-[24px] border ${cardClass}`}>
