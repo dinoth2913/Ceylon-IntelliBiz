@@ -105,6 +105,22 @@ Everything is stored in one MongoDB database: users, customers, vendors, orders,
 - To run the end-to-end tests against a real MongoDB, see the comment at the top of `MongoEndToEndTest`. Without one, `mvn test` skips them.
 - Data from an earlier version that used PostgreSQL is **not** carried over. If you have real data there, it needs a one-off migration (ids change from numbers to ObjectIds).
 
+## Backups
+
+The database only lives in a Docker volume (`mongodata`). If that volume is ever removed — `docker compose down -v`, a volume prune, disk failure — everything in it is gone for good. Back it up before anything risky:
+
+```bash
+./scripts/backup-db.sh
+```
+
+Writes a timestamped, gzipped `mongodump` archive to `backups/` (gitignored — never commit real data). To restore one:
+
+```bash
+./scripts/restore-db.sh backups/intellibiz-20260101-120000.archive.gz
+```
+
+This overwrites the current database with the backup's contents, so it asks for confirmation first. Keep copies of your backups somewhere off this machine — a local file doesn't help if the machine itself is what fails.
+
 ## Roadmap
 
 - Multi-factor authentication and SSO

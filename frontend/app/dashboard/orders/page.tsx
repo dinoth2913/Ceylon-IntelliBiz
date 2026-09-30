@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Pencil, Plus, Radio, Search, ShoppingBag, Trash2, X } from 'lucide-react';
+import { Download, Pencil, Plus, Radio, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { ConfirmDeleteButton } from '@/components/dashboard/confirm-delete-button';
 import { apiFetch } from '@/lib/auth';
 import { canWrite } from '@/lib/roles';
+import { downloadCsv } from '@/lib/csv';
 import { orders as seedOrders, formatLkr, type OrderRecord } from '@/lib/dashboard-data';
 
 const statuses = ['All', 'Processing', 'Fulfilled', 'Pending payment', 'Cancelled'] as const;
@@ -290,15 +291,37 @@ export default function OrdersPage() {
           </div>
           <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Orders</h1>
         </div>
-        {canAdd && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => (showForm ? closeForm() : setShowForm(true))}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+            onClick={() =>
+              downloadCsv(
+                'orders.csv',
+                filtered.map((order) => ({
+                  Order: order.id,
+                  Customer: order.customer,
+                  Channel: order.channel,
+                  Items: order.items,
+                  'Total (LKR)': order.total,
+                  Status: order.status,
+                  Date: order.date
+                }))
+              )
+            }
+            disabled={filtered.length === 0}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 ${darkMode ? 'border-white/10 text-slate-200 hover:bg-white/5' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
           >
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? 'Close' : 'Add order'}
+            <Download className="h-4 w-4" /> Export CSV
           </button>
-        )}
+          {canAdd && (
+            <button
+              onClick={() => (showForm ? closeForm() : setShowForm(true))}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+            >
+              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showForm ? 'Close' : 'Add order'}
+            </button>
+          )}
+        </div>
       </div>
 
       {canAdd && showForm && (

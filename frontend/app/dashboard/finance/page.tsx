@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CircleDollarSign, FileWarning, Pencil, Plus, Radio, ReceiptText, Search, Wallet, X } from 'lucide-react';
+import { CircleDollarSign, Download, FileWarning, Pencil, Plus, Radio, ReceiptText, Search, Wallet, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { ConfirmDeleteButton } from '@/components/dashboard/confirm-delete-button';
 import { apiFetch } from '@/lib/auth';
 import { canWrite } from '@/lib/roles';
+import { downloadCsv } from '@/lib/csv';
 import { invoices as seedInvoices, formatLkr, type InvoiceRecord } from '@/lib/dashboard-data';
 
 const invoiceStatuses = ['Draft', 'Outstanding', 'Paid', 'Overdue'] as const;
@@ -235,15 +236,36 @@ export default function FinancePage() {
           </div>
           <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Invoices &amp; billing</h1>
         </div>
-        {canAdd && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => (showForm ? closeForm() : setShowForm(true))}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+            onClick={() =>
+              downloadCsv(
+                'invoices.csv',
+                filtered.map((invoice) => ({
+                  Invoice: invoice.id,
+                  Customer: invoice.customer,
+                  'Amount (LKR)': invoice.amount,
+                  Status: invoice.status,
+                  Issued: invoice.issued,
+                  Due: invoice.due
+                }))
+              )
+            }
+            disabled={filtered.length === 0}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 ${darkMode ? 'border-white/10 text-slate-200 hover:bg-white/5' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
           >
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? 'Close' : 'Add invoice'}
+            <Download className="h-4 w-4" /> Export CSV
           </button>
-        )}
+          {canAdd && (
+            <button
+              onClick={() => (showForm ? closeForm() : setShowForm(true))}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
+            >
+              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showForm ? 'Close' : 'Add invoice'}
+            </button>
+          )}
+        </div>
       </div>
 
       {canAdd && showForm && (

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CircleAlert, Inbox, Loader2, Mail, Package, Plus, RefreshCw, Star, Tag, Ticket, Trash2, X } from 'lucide-react';
+import { CircleAlert, Inbox, Loader2, Mail, Package, Pencil, Plus, RefreshCw, Star, Tag, Ticket, Trash2, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
 import { BarList } from '@/components/dashboard/bar-list';
 import { apiFetch } from '@/lib/auth';
@@ -59,6 +59,7 @@ export default function MarketplaceManagementPage() {
   const [couponsState, setCouponsState] = useState<LoadState>('loading');
 
   const [showForm, setShowForm] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -158,6 +159,26 @@ export default function MarketplaceManagementPage() {
     }));
   }, [products]);
 
+  const closeProductForm = () => {
+    setShowForm(false);
+    setEditingProductId(null);
+    setForm(emptyForm);
+    setFormError(null);
+  };
+
+  const startEditProduct = (product: BackendProduct) => {
+    setEditingProductId(product.id);
+    setForm({
+      title: product.title,
+      description: product.description,
+      price: String(product.price),
+      category: product.category,
+      features: (product.features ?? []).join(', ')
+    });
+    setFormError(null);
+    setShowForm(true);
+  };
+
   const handleAddProduct = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -169,8 +190,8 @@ export default function MarketplaceManagementPage() {
     setSaving(true);
     setFormError(null);
     try {
-      const response = await apiFetch('/api/products', {
-        method: 'POST',
+      const response = await apiFetch(editingProductId ? `/api/products/${editingProductId}` : '/api/products', {
+        method: editingProductId ? 'PUT' : 'POST',
         body: JSON.stringify({
           title: form.title.trim(),
           description: form.description.trim(),
@@ -184,9 +205,10 @@ export default function MarketplaceManagementPage() {
       });
       if (!response.ok) throw new Error('Request failed');
       const saved: BackendProduct = await response.json();
-      setProducts((current) => [saved, ...current]);
-      setForm(emptyForm);
-      setShowForm(false);
+      setProducts((current) =>
+        editingProductId ? current.map((p) => (p.id === editingProductId ? saved : p)) : [saved, ...current]
+      );
+      closeProductForm();
     } catch {
       setFormError('Could not save this product. Check that the backend is reachable and try again.');
     } finally {
@@ -311,7 +333,7 @@ export default function MarketplaceManagementPage() {
         </div>
         {canManage && (
           <button
-            onClick={() => setShowForm((value) => !value)}
+            onClick={() => (showForm ? closeProductForm() : setShowForm(true))}
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
           >
             {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -359,7 +381,7 @@ export default function MarketplaceManagementPage() {
           {formError && <p className="sm:col-span-2 text-sm text-rose-600 dark:text-rose-400">{formError}</p>}
           <div className="sm:col-span-2">
             <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
-              <Package className="h-4 w-4" /> {saving ? 'Saving…' : 'Save product'}
+              <Package className="h-4 w-4" /> {saving ? 'Saving…' : editingProductId ? 'Save changes' : 'Save product'}
             </button>
           </div>
         </motion.form>
@@ -462,14 +484,23 @@ export default function MarketplaceManagementPage() {
                     <h3 className={`truncate text-base font-semibold ${heading}`}>{product.title}</h3>
                   </div>
                   {canManage && (
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      disabled={deletingId === product.id}
-                      aria-label={`Delete ${product.title}`}
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition disabled:opacity-50 ${darkMode ? 'text-slate-400 hover:bg-rose-400/10 hover:text-rose-300' : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => startEditProduct(product)}
+                        aria-label={`Edit ${product.title}`}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full transition ${darkMode ? 'text-slate-400 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        disabled={deletingId === product.id}
+                        aria-label={`Delete ${product.title}`}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full transition disabled:opacity-50 ${darkMode ? 'text-slate-400 hover:bg-rose-400/10 hover:text-rose-300' : 'text-slate-400 hover:bg-rose-50 hover:text-rose-600'}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
                 <p className={`mt-2 line-clamp-2 text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{product.description}</p>

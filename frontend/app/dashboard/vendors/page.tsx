@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Mail, Phone, Plus, Radio, Search, UserRound, X } from 'lucide-react';
+import { Building2, Mail, Pencil, Phone, Plus, Radio, Search, UserRound, X } from 'lucide-react';
 import { useDashboardTheme, useDashboardUser } from '@/components/dashboard/dashboard-shell';
+import { ConfirmDeleteButton } from '@/components/dashboard/confirm-delete-button';
 import { apiFetch } from '@/lib/auth';
 import { shortId } from '@/lib/utils';
 import { canWrite } from '@/lib/roles';
@@ -18,6 +19,8 @@ type BackendVendor = {
   createdAt: string | null;
 };
 
+type DisplayVendor = VendorRecord & { backendId: string | null };
+
 function formatDate(iso: string | null) {
   if (!iso) return '—';
   const date = new Date(iso);
@@ -25,9 +28,10 @@ function formatDate(iso: string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
-function mapVendor(record: BackendVendor): VendorRecord {
+function mapVendor(record: BackendVendor): DisplayVendor {
   return {
     id: `VEN-${shortId(record.id)}`,
+    backendId: record.id,
     company: record.companyName,
     contact: record.contactName ?? '—',
     email: record.email ?? '—',
@@ -42,13 +46,15 @@ export default function VendorsPage() {
   const { darkMode } = useDashboardTheme();
   const { user } = useDashboardUser();
   const canAdd = canWrite('vendors', user?.role);
-  const [vendors, setVendors] = useState<VendorRecord[]>(seedVendors);
+  const [vendors, setVendors] = useState<DisplayVendor[]>(seedVendors.map((v) => ({ ...v, backendId: null })));
   const [dataSource, setDataSource] = useState<'sample' | 'live'>('sample');
   const [query, setQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const cardClass = darkMode ? 'border-white/10 bg-slate-900/60' : 'border-slate-200 bg-white/80 shadow-sm';
   const inputClass = `rounded-xl border px-3 py-2 text-sm outline-none ${darkMode ? 'border-white/10 bg-slate-950/60 text-white placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-900'}`;
@@ -81,46 +87,92 @@ export default function VendorsPage() {
     return vendors.filter((vendor) => vendor.company.toLowerCase().includes(needle) || vendor.contact.toLowerCase().includes(needle));
   }, [vendors, query]);
 
-  const handleAddVendor = async (event: React.FormEvent) => {
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setError(null);
+  };
+
+  const startEdit = (vendor: DisplayVendor) => {
+    if (!vendor.backendId) return;
+    setEditingId(vendor.backendId);
+    setForm({
+      company: vendor.company,
+      contact: vendor.contact === '—' ? '' : vendor.contact,
+      email: vendor.email === '—' ? '' : vendor.email,
+      phone: vendor.phone === '—' ? '' : vendor.phone
+    });
+    setError(null);
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.company.trim() || saving) return;
     setSaving(true);
     setError(null);
 
+    const body = {
+      companyName: form.company.trim(),
+      contactName: form.contact.trim() || null,
+      email: form.email.trim() || null,
+      phone: form.phone.trim() || null
+    };
+
     try {
-      const response = await apiFetch('/api/vendors', {
-        method: 'POST',
-        body: JSON.stringify({
-          companyName: form.company.trim(),
-          contactName: form.contact.trim() || null,
-          email: form.email.trim() || null,
-          phone: form.phone.trim() || null
-        })
+      const response = await apiFetch(editingId ? `/api/vendors/${editingId}` : '/api/vendors', {
+        method: editingId ? 'PUT' : 'POST',
+        body: JSON.stringify(body)
       });
       if (!response.ok) throw new Error('Request failed');
       const saved: BackendVendor = await response.json();
-      setVendors((current) => [mapVendor(saved), ...(dataSource === 'live' ? current : [])]);
+      const mapped = mapVendor(saved);
+      setVendors((current) =>
+        editingId
+          ? current.map((v) => (v.backendId === editingId ? mapped : v))
+          : [mapped, ...(dataSource === 'live' ? current : [])]
+      );
       setDataSource('live');
+      closeForm();
     } catch {
-      // Backend unavailable: keep the vendor locally so the page stays usable, but say so.
-      setVendors((current) => [
-        {
-          id: `VEN-${300 + current.length + 1}`,
-          company: form.company.trim(),
-          contact: form.contact.trim() || '—',
-          email: form.email.trim() || '—',
-          phone: form.phone.trim() || '—',
-          added: 'Just now'
-        },
-        ...current
-      ]);
-      setError('The server could not be reached, so this vendor was only added on this page and was not saved.');
+      if (editingId) {
+        setError('The server could not be reached. Nothing was saved.');
+      } else {
+        // Backend unavailable: keep the vendor locally so the page stays usable, but say so.
+        setVendors((current) => [
+          {
+            id: `VEN-${300 + current.length + 1}`,
+            backendId: null,
+            company: form.company.trim(),
+            contact: form.contact.trim() || '—',
+            email: form.email.trim() || '—',
+            phone: form.phone.trim() || '—',
+            added: 'Just now'
+          },
+          ...current
+        ]);
+        setError('The server could not be reached, so this vendor was only added on this page and was not saved.');
+        closeForm();
+      }
     } finally {
       setSaving(false);
     }
+  };
 
-    setForm(emptyForm);
-    setShowForm(false);
+  const handleDelete = async (vendor: DisplayVendor) => {
+    if (!vendor.backendId) return;
+    setDeletingId(vendor.backendId);
+    setError(null);
+    try {
+      const response = await apiFetch(`/api/vendors/${vendor.backendId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Request failed');
+      setVendors((current) => current.filter((v) => v.backendId !== vendor.backendId));
+    } catch {
+      setError('Could not delete this vendor. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -144,7 +196,7 @@ export default function VendorsPage() {
           <h1 className={`text-2xl font-semibold tracking-tight sm:text-3xl ${darkMode ? 'text-white' : 'text-slate-950'}`}>Vendors</h1>
         </div>
         {canAdd && <button
-          onClick={() => setShowForm((value) => !value)}
+          onClick={() => (showForm ? closeForm() : setShowForm(true))}
           className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${darkMode ? 'bg-cyan-400 text-slate-950 hover:bg-cyan-300' : 'bg-slate-950 text-white hover:bg-slate-800'}`}
         >
           {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -162,7 +214,7 @@ export default function VendorsPage() {
         <motion.form
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          onSubmit={handleAddVendor}
+          onSubmit={handleSubmit}
           className={`grid gap-3 rounded-[24px] border p-5 sm:grid-cols-2 lg:grid-cols-4 ${cardClass}`}
         >
           <label className={labelClass}>
@@ -183,7 +235,7 @@ export default function VendorsPage() {
           </label>
           <div className="sm:col-span-2 lg:col-span-4">
             <button type="submit" disabled={saving} className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-60 ${darkMode ? 'bg-cyan-400 text-slate-950' : 'bg-slate-950 text-white'}`}>
-              <Building2 className="h-4 w-4" /> {saving ? 'Saving…' : 'Save vendor'}
+              <Building2 className="h-4 w-4" /> {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save vendor'}
             </button>
           </div>
         </motion.form>
@@ -221,10 +273,27 @@ export default function VendorsPage() {
                 <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${darkMode ? 'bg-cyan-400/10 text-cyan-300' : 'bg-slate-950 text-white'}`}>
                   <Building2 className="h-5 w-5" />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className={`text-xs font-medium uppercase tracking-wide ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{vendor.id}</p>
                   <h3 className={`truncate text-base font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{vendor.company}</h3>
                 </div>
+                {canAdd && vendor.backendId && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => startEdit(vendor)}
+                      aria-label={`Edit ${vendor.company}`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full transition ${darkMode ? 'text-slate-400 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <ConfirmDeleteButton
+                      darkMode={darkMode}
+                      label={`Delete ${vendor.company}`}
+                      busy={deletingId === vendor.backendId}
+                      onConfirm={() => handleDelete(vendor)}
+                    />
+                  </div>
+                )}
               </div>
               <dl className={`mt-4 space-y-2 text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                 <div className="flex items-center gap-2"><UserRound className="h-3.5 w-3.5 shrink-0" /> <dd className="truncate">{vendor.contact}</dd></div>
